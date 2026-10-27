@@ -1,9 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import { ComparisonPanel } from './components/ComparisonPanel';
 import { InfoViews } from './components/InfoViews';
 import { ModeResultCard } from './components/ModeResultCard';
 import { PixelFlagStamp } from './components/PixelIcons';
-import { RetroConfirmDialog } from './components/RetroConfirmDialog';
 import { RetroHeader, type ActiveNavSection } from './components/RetroHeader';
 import { TextEditorWindow } from './components/TextEditorWindow';
 import { MODE_CONFIGS, ORDERED_MODE_CONFIGS } from './config/modes';
@@ -15,32 +13,20 @@ import {
 } from './services/api';
 import {
   VOICE_MODES,
-  type EditableModeState,
   type ModeTransformation,
   type VoiceMode,
 } from './types/transform';
-import { copyTextToClipboard, formatAllResultsForClipboard } from './utils/clipboard';
-import { trimToSafeBoundary } from './utils/textStats';
+import { SAMPLE_PROMPTS, trimToSafeBoundary } from './utils/textStats';
 
-type ResultsMap = Record<VoiceMode, EditableModeState>;
+type ResultsMap = Record<VoiceMode, ModeTransformation>;
 
-interface PendingConfirmState {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-}
-
-function buildEditableMap(results: ModeTransformation[]): ResultsMap {
+function buildResultsMap(results: ModeTransformation[]): ResultsMap {
   const map = {} as ResultsMap;
   for (const mode of VOICE_MODES) {
     const found = results.find((r) => r.mode === mode);
-    const text = found?.text || '';
     map[mode] = {
       mode,
-      text,
-      aiOriginalText: text,
-      isEdited: false,
+      text: found?.text || '',
       explanations: found?.explanations || [],
       toneSummary: found?.toneSummary,
       reusablePattern: found?.reusablePattern,
@@ -53,10 +39,10 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<ActiveNavSection>('home');
   const [inputText, setInputText] = useState<string>('');
   const [submittedSourceText, setSubmittedSourceText] = useState<string>('');
-  const [teachMe, setTeachMe] = useState<boolean>(false);
+  const [teachMe, setTeachMe] = useState<boolean>(true);
+  const [sampleIndex, setSampleIndex] = useState<number>(0);
 
   const [resultsMap, setResultsMap] = useState<ResultsMap | null>(null);
-  const [lastChunkCount, setLastChunkCount] = useState<number>(1);
 
   const [isTransformingAll, setIsTransformingAll] = useState<boolean>(false);
   const [regeneratingModes, setRegeneratingModes] = useState<Record<VoiceMode, boolean>>({
@@ -73,14 +59,7 @@ export default function App() {
     retryFn?: () => void;
   } | null>(null);
 
-  const [compareModeOpen, setCompareModeOpen] = useState<boolean>(false);
-  const [compareSelectedMode, setCompareSelectedMode] = useState<VoiceMode>('natural_american');
-
-  const [includeNotesInCopyAll, setIncludeNotesInCopyAll] = useState<boolean>(false);
-  const [copyAllStatus, setCopyAllStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
-
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmState | null>(null);
 
   const transformAbortRef = useRef<AbortController | null>(null);
   const resultsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -92,12 +71,6 @@ export default function App() {
 
   const isAnyModeRegenerating = Object.values(regeneratingModes).some(Boolean);
   const isAnyBusy = isTransformingAll || isAnyModeRegenerating;
-
-  const hasAnyManualEdits = resultsMap
-    ? VOICE_MODES.some((m) => resultsMap[m].isEdited)
-    : false;
-
-  const hasWorkspaceContent = inputText.trim().length > 0 || resultsMap !== null;
 
   const executeTransformAll = useCallback(
     async (textToProcess: string, teachMeEnabled: boolean) => {
@@ -120,8 +93,7 @@ export default function App() {
         });
 
         setSubmittedSourceText(trimmed);
-        setResultsMap(buildEditableMap(res.results));
-        setLastChunkCount(res.chunkCount || 1);
+        setResultsMap(buildResultsMap(res.results));
         announce('All four American voices are ready below.');
 
         window.setTimeout(() => {
@@ -155,21 +127,6 @@ export default function App() {
 
   const handleAmericanizeSubmit = () => {
     if (isAnyBusy || !inputText.trim()) return;
-
-    if (hasAnyManualEdits && resultsMap) {
-      setPendingConfirm({
-        title: 'Replace Edited Results?',
-        message:
-          'One or more voice cards below contain your manual edits. Generating a fresh set of four voices will replace them.',
-        confirmLabel: 'Replace & Americanize',
-        onConfirm: () => {
-          setPendingConfirm(null);
-          executeTransformAll(inputText, teachMe);
-        },
-      });
-      return;
-    }
-
     executeTransformAll(inputText, teachMe);
   };
 
@@ -214,8 +171,6 @@ export default function App() {
             [mode]: {
               mode,
               text: res.result.text,
-              aiOriginalText: res.result.text,
-              isEdited: false,
               explanations: res.result.explanations || [],
               toneSummary: res.result.toneSummary,
               reusablePattern: res.result.reusablePattern,
@@ -241,26 +196,6 @@ export default function App() {
     },
     [announce, inputText, resultsMap, submittedSourceText, teachMe]
   );
-
-  const handleRequestSingleRegenerate = (mode: VoiceMode) => {
-    if (regeneratingModes[mode] || isTransformingAll) return;
-
-    if (resultsMap?.[mode]?.isEdited) {
-      const title = MODE_CONFIGS[mode].title;
-      setPendingConfirm({
-        title: `Overwrite Edits in ${title}?`,
-        message: `You edited the ${title} card manually. Regenerating this card will replace your changes in this window (your other three cards stay untouched).`,
-        confirmLabel: `Regenerate ${title}`,
-        onConfirm: () => {
-          setPendingConfirm(null);
-          executeSingleRegenerate(mode);
-        },
-      });
-      return;
-    }
-
-    executeSingleRegenerate(mode);
-  };
 
   const fetchNotesForExistingResults = useCallback(
     async (currentMap: ResultsMap, source: string) => {
@@ -327,88 +262,20 @@ export default function App() {
     }
   };
 
-  const handleEditCardText = (mode: VoiceMode, nextText: string) => {
-    setResultsMap((prev) => {
-      if (!prev) return prev;
-      const card = prev[mode];
-      return {
-        ...prev,
-        [mode]: {
-          ...card,
-          text: nextText,
-          isEdited: nextText !== card.aiOriginalText,
-        },
-      };
-    });
-  };
-
-  const handleRestoreCardOriginal = (mode: VoiceMode) => {
-    setResultsMap((prev) => {
-      if (!prev) return prev;
-      const card = prev[mode];
-      return {
-        ...prev,
-        [mode]: {
-          ...card,
-          text: card.aiOriginalText,
-          isEdited: false,
-        },
-      };
-    });
-    announce(`Restored original AI draft for ${MODE_CONFIGS[mode].title}.`);
-  };
-
-  const handleCopyAll = async () => {
-    if (!resultsMap) return;
-    const formatted = formatAllResultsForClipboard(
-      resultsMap,
-      teachMe && includeNotesInCopyAll
-    );
-    const outcome = await copyTextToClipboard(formatted);
-    if (outcome.ok) {
-      setCopyAllStatus('copied');
-      announce('Copied all four American voices to clipboard.');
-      window.setTimeout(() => setCopyAllStatus('idle'), 2200);
-    } else {
-      setCopyAllStatus('manual');
-      announce('Clipboard permission blocked—copy cards individually.');
-      window.setTimeout(() => setCopyAllStatus('idle'), 4000);
-    }
-  };
-
-  const executeResetWorkspace = () => {
-    transformAbortRef.current?.abort();
-    setIsTransformingAll(false);
-    setInputText('');
-    setSubmittedSourceText('');
-    setResultsMap(null);
-    setErrorBanner(null);
-    setCompareModeOpen(false);
+  const handleCycleSample = () => {
+    const sample = SAMPLE_PROMPTS[sampleIndex % SAMPLE_PROMPTS.length];
+    setSampleIndex((prev) => prev + 1);
+    setInputText(sample.text);
     setActiveSection('home');
-    announce('Studio workspace cleared.');
+    announce(`Loaded sample: ${sample.label}`);
   };
 
-  const handleResetWorkspace = () => {
-    if (hasAnyManualEdits) {
-      setPendingConfirm({
-        title: 'Clear Studio & Edits?',
-        message:
-          'Starting over will clear your original text, all four voices, and your manual edits from this session.',
-        confirmLabel: 'Clear Everything',
-        onConfirm: () => {
-          setPendingConfirm(null);
-          executeResetWorkspace();
-        },
-      });
-      return;
-    }
-    executeResetWorkspace();
-  };
-
-  const handleClearInputOnly = () => {
+  const handleClearInput = () => {
     setInputText('');
+    setResultsMap(null);
+    setSubmittedSourceText('');
     setErrorBanner(null);
-    announce('Original input text cleared.');
+    announce('Text cleared.');
   };
 
   const handleTrimOversizedInput = () => {
@@ -428,12 +295,11 @@ export default function App() {
       <RetroHeader
         activeSection={activeSection}
         onSelectSection={(sec) => setActiveSection(sec)}
-        hasWorkspaceContent={hasWorkspaceContent}
-        onResetWorkspace={handleResetWorkspace}
+        onCycleSample={handleCycleSample}
       />
 
       {/* Centered Content Container */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-7 sm:py-10 space-y-8">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-9 space-y-6">
         {activeSection !== 'home' ? (
           <InfoViews
             section={activeSection}
@@ -446,22 +312,22 @@ export default function App() {
         ) : (
           <>
             {/* Studio Hero Banner */}
-            <section className="text-center space-y-3 max-w-2xl mx-auto">
-              <div className="inline-flex items-center justify-center gap-3 font-mono text-xs text-[#3E3A30]">
-                <PixelFlagStamp className="w-8 h-5 shrink-0" />
-                <span>American English Voice Lab &middot; Session Private</span>
+            <section className="text-center space-y-2.5 max-w-2xl mx-auto">
+              <div className="inline-flex items-center justify-center gap-2.5 font-mono text-xs text-[#3E3A30]">
+                <PixelFlagStamp className="w-7 h-4 shrink-0" />
+                <span>TalkLikeUS &middot; American English Voice Lab</span>
               </div>
 
               <h1
                 style={{ textWrap: 'balance' }}
-                className="font-pixel text-2xl sm:text-4xl font-bold text-[#141B29] tracking-tight leading-tight"
+                className="font-mono text-2xl sm:text-4xl font-bold text-[#141B29] tracking-tight leading-tight"
               >
                 Say it like you mean it.
               </h1>
 
               <p
                 style={{ textWrap: 'balance' }}
-                className="text-base sm:text-lg text-[#2C3342] leading-relaxed"
+                className="text-sm sm:text-base text-[#2C3342] leading-relaxed"
               >
                 Drop your text. Get four American voices. Keep the one that sounds like you.
               </p>
@@ -474,7 +340,7 @@ export default function App() {
                 className="retro-window !bg-[#FDF0ED] !border-[#B41616] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
                 <div className="space-y-1">
-                  <p className="font-pixel text-xs text-[#8F1111]">
+                  <p className="font-mono text-xs font-bold text-[#8F1111]">
                     Transformation Notice
                   </p>
                   <p className="text-sm text-[#4A0B0B] leading-relaxed">
@@ -513,128 +379,36 @@ export default function App() {
               isAnyBusy={isAnyBusy}
               onSubmitTransform={handleAmericanizeSubmit}
               onCancelTransform={handleCancelTransform}
-              onClearText={handleClearInputOnly}
+              onClearText={handleClearInput}
               onTrimToLimit={handleTrimOversizedInput}
             />
 
-            {/* Results Laboratory Section */}
+            {/* Compact Top-to-Bottom Results Section (No Intermediate Banner Box) */}
             {resultsMap && (
               <section
                 ref={resultsAnchorRef}
-                aria-labelledby="results-lab-heading"
-                className="space-y-5 pt-2"
+                aria-label="Generated American English voices"
+                className="retro-window divide-y-2 divide-[#141B29]"
               >
-                {/* Results Master Control Bar */}
-                <div className="retro-window px-4 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <h2
-                      id="results-lab-heading"
-                      className="font-pixel text-sm sm:text-base text-[#142850]"
-                    >
-                      Four American Voices Ready
-                    </h2>
-                    <p className="font-mono text-xs text-[#4B4639]">
-                      Edit any window directly before copying
-                      {lastChunkCount > 1
-                        ? ` · Reassembled cleanly across ${lastChunkCount} paragraphs`
-                        : ''}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {teachMe && (
-                      <label className="inline-flex items-center gap-1.5 font-mono text-xs text-[#2C3342] cursor-pointer mr-1 whitespace-nowrap shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={includeNotesInCopyAll}
-                          onChange={(e) => setIncludeNotesInCopyAll(e.target.checked)}
-                          className="w-4 h-4 accent-[#142850]"
-                        />
-                        <span>Include notes in Copy All</span>
-                      </label>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleCopyAll}
-                      className={`retro-btn min-h-[40px] px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 ${
-                        copyAllStatus === 'copied' ? '!bg-[#D6F5DF] !text-[#0F5128]' : ''
-                      }`}
-                    >
-                      {copyAllStatus === 'copied' ? 'ALL 4 COPIED!' : 'Copy All'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setCompareModeOpen((prev) => !prev)}
-                      className={`retro-btn min-h-[40px] px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 ${
-                        compareModeOpen ? '!bg-[#DCE6FA] !border-[#142850]' : ''
-                      }`}
-                    >
-                      {compareModeOpen ? 'Hide Compare' : 'Side-by-Side Compare'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleAmericanizeSubmit}
-                      disabled={isAnyBusy || !inputText.trim()}
-                      className="retro-btn min-h-[40px] px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0"
-                    >
-                      Regenerate All
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleResetWorkspace}
-                      disabled={isAnyBusy}
-                      className="retro-btn min-h-[40px] px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0"
-                    >
-                      Start Over
-                    </button>
-                  </div>
-                </div>
-
-                {/* Optional Side-by-Side Comparison View */}
-                {compareModeOpen && (
-                  <ComparisonPanel
-                    originalText={submittedSourceText || inputText}
-                    selectedMode={compareSelectedMode}
-                    onSelectMode={setCompareSelectedMode}
-                    resultsMap={resultsMap}
-                    onEditSelected={handleEditCardText}
-                    onClose={() => setCompareModeOpen(false)}
+                {ORDERED_MODE_CONFIGS.map((cfg) => (
+                  <ModeResultCard
+                    key={cfg.id}
+                    config={cfg}
+                    data={resultsMap[cfg.id]}
+                    teachMe={teachMe}
+                    isRegenerating={regeneratingModes[cfg.id]}
+                    isAnyTransformAllRunning={isTransformingAll}
+                    isLoadingNotes={isLoadingNotes}
+                    onRegenerate={() => executeSingleRegenerate(cfg.id)}
+                    onRequestNotes={() =>
+                      fetchNotesForExistingResults(
+                        resultsMap,
+                        submittedSourceText || inputText.trim()
+                      )
+                    }
                     onAnnounce={announce}
                   />
-                )}
-
-                {/* Balanced 2-Column Laboratory Result Grid (1-Column on Mobile) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
-                  {ORDERED_MODE_CONFIGS.map((cfg) => (
-                    <ModeResultCard
-                      key={cfg.id}
-                      config={cfg}
-                      data={resultsMap[cfg.id]}
-                      teachMe={teachMe}
-                      isRegenerating={regeneratingModes[cfg.id]}
-                      isAnyTransformAllRunning={isTransformingAll}
-                      isLoadingNotes={isLoadingNotes}
-                      onEditText={(next) => handleEditCardText(cfg.id, next)}
-                      onRestoreOriginal={() => handleRestoreCardOriginal(cfg.id)}
-                      onRegenerate={() => handleRequestSingleRegenerate(cfg.id)}
-                      onOpenCompare={() => {
-                        setCompareSelectedMode(cfg.id);
-                        setCompareModeOpen(true);
-                      }}
-                      onRequestNotes={() =>
-                        fetchNotesForExistingResults(
-                          resultsMap,
-                          submittedSourceText || inputText.trim()
-                        )
-                      }
-                      onAnnounce={announce}
-                    />
-                  ))}
-                </div>
+                ))}
               </section>
             )}
           </>
@@ -642,9 +416,11 @@ export default function App() {
       </main>
 
       {/* Quiet Authentic 1990s Footer */}
-      <footer className="w-full border-t-2 border-[#141B29] bg-[#E5E0D0] mt-12">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-[#3E3A30]">
-          <span>TalkLikeUS &middot; Same idea. Four American voices.</span>
+      <footer className="w-full border-t-2 border-[#141B29] bg-[#E5E0D0] mt-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-[#3E3A30]">
+          <span>
+            <strong className="text-[#141B29]">TalkLikeUS</strong> &middot; Same idea. Four American voices.
+          </span>
           <div className="flex flex-wrap items-center gap-4">
             <a
               href="#how"
@@ -679,16 +455,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Accessible Confirmation Dialog for Overwriting Manual Edits */}
-      <RetroConfirmDialog
-        open={pendingConfirm !== null}
-        title={pendingConfirm?.title || ''}
-        message={pendingConfirm?.message || ''}
-        confirmLabel={pendingConfirm?.confirmLabel || 'Confirm'}
-        onConfirm={() => pendingConfirm?.onConfirm()}
-        onCancel={() => setPendingConfirm(null)}
-      />
     </div>
   );
 }

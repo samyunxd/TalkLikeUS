@@ -21,7 +21,7 @@ const REGISTER_LABELS: Record<RegisterLevel, { label: string; textClass: string 
     textClass: 'text-[#142850]',
   },
   very_informal: {
-    label: 'Very Informal (Friends/Texting)',
+    label: 'Very Informal',
     textClass: 'text-[#6B3A00]',
   },
   blunt: {
@@ -29,7 +29,7 @@ const REGISTER_LABELS: Record<RegisterLevel, { label: string; textClass: string 
     textClass: 'text-[#8C2B0E]',
   },
   vulgar: {
-    label: 'Vulgar / Strong Language',
+    label: 'Vulgar / Strong',
     textClass: 'text-[#B41616]',
   },
 };
@@ -48,30 +48,24 @@ export function TeachMePanel({
     explanations.length > 0 || Boolean(toneSummary) || Boolean(reusablePattern);
 
   return (
-    <div className="mt-4 pt-3 border-t border-dashed border-[#8E8772]">
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          aria-expanded={expanded}
-          className="inline-flex items-center gap-2 font-mono text-xs font-semibold text-[#0000EE] hover:text-[#551A8B] underline underline-offset-4 cursor-pointer whitespace-nowrap shrink-0"
-        >
-          <PixelBookIcon className="w-4 h-4 shrink-0" />
-          <span>
-            {expanded ? '[-] Hide Teach Me Notes' : `[+] Show Teach Me Notes (${explanations.length})`}
-          </span>
-        </button>
-
-        <span className="font-mono text-[11px] text-[#555043] truncate">
-          Excluded from Copy
+    <div className="pt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-[#0000EE] hover:text-[#551A8B] underline underline-offset-4 cursor-pointer whitespace-nowrap shrink-0"
+      >
+        <PixelBookIcon className="w-3.5 h-3.5 shrink-0" />
+        <span>
+          {expanded ? '[-] Hide Teach Me Notes' : `[+] Teach Me Notes (${explanations.length})`}
         </span>
-      </div>
+      </button>
 
       {expanded && (
-        <div className="mt-3 bg-[#EDE9DA] border border-[#8E8772] p-3.5 space-y-3 text-sm">
+        <div className="mt-2 bg-[#ECE8D9] border border-[#8E8772] px-3.5 py-2.5 space-y-2 text-xs sm:text-sm">
           {isLoadingNotes ? (
             <p className="font-mono text-xs text-[#142850]">
-              Analyzing {modeTitle} phrasing and idioms...
+              Loading {modeTitle} learning notes...
             </p>
           ) : !hasContent ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -82,7 +76,7 @@ export function TeachMePanel({
                 <button
                   type="button"
                   onClick={onRequestNotes}
-                  className="retro-btn px-3 py-1 text-xs font-semibold whitespace-nowrap shrink-0"
+                  className="retro-btn px-2.5 py-1 text-xs font-semibold whitespace-nowrap shrink-0"
                 >
                   Generate Notes
                 </button>
@@ -91,18 +85,18 @@ export function TeachMePanel({
           ) : (
             <>
               {toneSummary && (
-                <p className="text-xs sm:text-sm text-[#1E2533] leading-relaxed">
-                  <strong className="font-mono text-xs text-[#142850]">When it fits: </strong>
+                <p className="text-xs text-[#1E2533] leading-relaxed">
+                  <strong className="font-mono text-[#142850]">Context: </strong>
                   {toneSummary}
                 </p>
               )}
 
               {explanations.length > 0 && (
-                <ul className="space-y-2.5 divide-y divide-dashed divide-[#BCB5A1]">
+                <ul className="space-y-1.5 divide-y divide-dashed divide-[#C4BDA9]">
                   {explanations.map((item, idx) => {
                     const regInfo = REGISTER_LABELS[item.register] || REGISTER_LABELS.everyday;
                     return (
-                      <li key={`${item.replacement}-${idx}`} className={idx > 0 ? 'pt-2.5' : ''}>
+                      <li key={`${item.replacement}-${idx}`} className={idx > 0 ? 'pt-1.5' : ''}>
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-mono text-xs">
                           <span className="line-through text-[#666052]">
                             &ldquo;{item.original}&rdquo;
@@ -113,17 +107,18 @@ export function TeachMePanel({
                           <span className="font-semibold text-[#141B29]">
                             &ldquo;{item.replacement}&rdquo;
                           </span>
-                        </div>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[#555043]">
-                          <span className="capitalize">{item.type}</span>
-                          <span aria-hidden="true">&middot;</span>
+                          <span aria-hidden="true" className="text-[#8E8772]">
+                            &middot;
+                          </span>
+                          <span className="capitalize text-[#555043]">{item.type}</span>
+                          <span aria-hidden="true" className="text-[#8E8772]">
+                            &middot;
+                          </span>
                           <span className={`font-semibold ${regInfo.textClass}`}>
                             {regInfo.label}
                           </span>
                         </div>
-
-                        <p className="mt-1 text-xs sm:text-sm text-[#232B3A] leading-relaxed">
+                        <p className="mt-0.5 text-xs text-[#232B3A] leading-relaxed">
                           {item.reason}
                         </p>
                       </li>
@@ -133,8 +128,8 @@ export function TeachMePanel({
               )}
 
               {reusablePattern && (
-                <div className="pt-2.5 border-t border-dashed border-[#BCB5A1] text-xs sm:text-sm text-[#142850]">
-                  <strong className="font-mono text-xs">Reusable Pattern: </strong>
+                <div className="pt-1.5 border-t border-dashed border-[#C4BDA9] text-xs text-[#142850]">
+                  <strong className="font-mono">Pattern: </strong>
                   <span>{reusablePattern}</span>
                 </div>
               )}

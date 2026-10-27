@@ -17,7 +17,7 @@ export function InfoViews({
     return (
       <section aria-labelledby="how-heading" className="retro-window">
         <div className="bg-[#142850] text-[#F7F5EC] px-4 py-2.5 flex items-center justify-between gap-3 border-b-2 border-[#141B29]">
-          <h2 id="how-heading" className="font-pixel text-xs sm:text-sm tracking-wide">
+          <h2 id="how-heading" className="font-mono text-sm sm:text-base font-bold tracking-tight">
             How TalkLikeUS Works
           </h2>
           <button
@@ -31,7 +31,7 @@ export function InfoViews({
 
         <div className="p-5 sm:p-7 space-y-6 text-[#141B29]">
           <div className="space-y-2">
-            <h3 className="font-pixel text-base sm:text-lg text-[#142850]">
+            <h3 className="font-mono text-base sm:text-lg font-bold text-[#142850]">
               Same idea. Four American voices. Your words, upgraded.
             </h3>
             <p className="text-sm sm:text-base leading-relaxed text-[#252D3D]">
@@ -54,21 +54,21 @@ export function InfoViews({
             </li>
             <li className="space-y-1">
               <p className="font-mono text-sm font-semibold text-[#142850]">
-                Step 02. Compare All Four Voices Side by Side
+                Step 02. Scan All Four Voices Top to Bottom
               </p>
               <p className="text-sm leading-relaxed text-[#2C3342]">
                 One click generates Natural American, Casual &amp; Slang, Unfiltered &amp; Blunt, and Badass
-                &amp; Confident simultaneously—each with its own rhythm, vocabulary, and directness.
+                &amp; Confident in a clean vertical view—with Teach Me learning notes enabled by default.
               </p>
             </li>
             <li className="space-y-1">
               <p className="font-mono text-sm font-semibold text-[#142850]">
-                Step 03. Edit, Regenerate One Card, or Turn On &ldquo;Teach Me&rdquo;
+                Step 03. Click Any Output Text to Copy Immediately
               </p>
               <p className="text-sm leading-relaxed text-[#2C3342]">
-                Every output window is a live text editor. Tweak a phrase before copying, regenerate just one
-                mode without touching the other three, or toggle Teach Me to inspect idioms, contractions,
-                register warnings, and reusable sentence patterns.
+                Click directly on any generated output box to copy that voice to your clipboard right away,
+                or click Regenerate on any single voice to try a fresh angle without changing the other
+                three.
               </p>
             </li>
           </ol>
@@ -102,7 +102,7 @@ export function InfoViews({
     return (
       <section aria-labelledby="voices-heading" className="retro-window">
         <div className="bg-[#142850] text-[#F7F5EC] px-4 py-2.5 flex items-center justify-between gap-3 border-b-2 border-[#141B29]">
-          <h2 id="voices-heading" className="font-pixel text-xs sm:text-sm tracking-wide">
+          <h2 id="voices-heading" className="font-mono text-sm sm:text-base font-bold tracking-tight">
             The Four American Voice Profiles
           </h2>
           <button
@@ -120,14 +120,14 @@ export function InfoViews({
             with a single swapped adjective:
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
             {ORDERED_MODE_CONFIGS.map((cfg) => (
-              <div key={cfg.id} className="bg-[#ECE8D9] border-2 border-[#141B29] p-4 space-y-2">
+              <div key={cfg.id} className="bg-[#ECE8D9] border-2 border-[#141B29] p-4 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <div className={`${cfg.headerBgClass} p-1.5 border border-[#141B29]`}>
-                    <PixelModeIcon mode={cfg.id} className="w-4 h-4" />
+                  <div className={`${cfg.headerBgClass} p-1 border border-[#141B29]`}>
+                    <PixelModeIcon mode={cfg.id} className="w-3.5 h-3.5" />
                   </div>
-                  <h3 className="font-pixel text-xs sm:text-sm text-[#141B29]">
+                  <h3 className="font-mono text-sm font-bold text-[#141B29]">
                     {cfg.number}. {cfg.title}
                   </h3>
                 </div>
@@ -157,7 +157,7 @@ export function InfoViews({
   return (
     <section aria-labelledby="about-heading" className="retro-window">
       <div className="bg-[#142850] text-[#F7F5EC] px-4 py-2.5 flex items-center justify-between gap-3 border-b-2 border-[#141B29]">
-        <h2 id="about-heading" className="font-pixel text-xs sm:text-sm tracking-wide">
+        <h2 id="about-heading" className="font-mono text-sm sm:text-base font-bold tracking-tight">
           About TalkLikeUS &amp; Privacy Principles
         </h2>
         <button
@@ -173,7 +173,7 @@ export function InfoViews({
         <div className="flex items-start gap-4">
           <PixelFlagStamp className="w-12 h-8 shrink-0 mt-1" />
           <div className="space-y-2">
-            <h3 className="font-pixel text-base sm:text-lg text-[#142850]">
+            <h3 className="font-mono text-base sm:text-lg font-bold text-[#142850]">
               Built for Expressive, Human English
             </h3>
             <p className="text-sm sm:text-base leading-relaxed text-[#252D3D]">
@@ -207,7 +207,7 @@ export function InfoViews({
               <li>No third-party analytics capturing your pasted text.</li>
               <li>
                 Text is sent over a server-side proxy to Google&apos;s Gemini API solely to generate your
-                rewrites, and Reset Studio wipes your workspace immediately.
+                rewrites, and Clear Text removes your input immediately.
               </li>
             </ul>
           </div>

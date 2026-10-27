@@ -1,17 +1,17 @@
+import { PixelFlagStamp } from './PixelIcons';
+
 export type ActiveNavSection = 'home' | 'how' | 'voices' | 'about';
 
 interface RetroHeaderProps {
   activeSection: ActiveNavSection;
   onSelectSection: (section: ActiveNavSection) => void;
-  hasWorkspaceContent: boolean;
-  onResetWorkspace: () => void;
+  onCycleSample: () => void;
 }
 
 export function RetroHeader({
   activeSection,
   onSelectSection,
-  hasWorkspaceContent,
-  onResetWorkspace,
+  onCycleSample,
 }: RetroHeaderProps) {
   const navItems: Array<{ id: ActiveNavSection; label: string }> = [
     { id: 'home', label: 'Home' },
@@ -22,17 +22,18 @@ export function RetroHeader({
 
   return (
     <header className="w-full bg-[#F4F1E6] border-b-2 border-[#141B29]">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-8">
-        {/* Zone 1: Single-line Brand Wordmark */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-8">
+        {/* Zone 1: Exact Mixed-Case Brand Wordmark "TalkLikeUS" */}
         <a
           href="#studio"
           onClick={(e) => {
             e.preventDefault();
             onSelectSection('home');
           }}
-          className="font-pixel text-lg sm:text-xl font-bold tracking-tight text-[#142850] hover:text-[#0000EE] whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-2.5 font-mono text-xl sm:text-2xl font-bold tracking-tight text-[#142850] hover:text-[#0000EE] whitespace-nowrap shrink-0"
         >
-          TalkLikeUS
+          <PixelFlagStamp className="w-7 h-5 shrink-0" />
+          <span>TalkLikeUS</span>
         </a>
 
         {/* Zone 2: Clean single-line hypertext navigation links */}
@@ -71,11 +72,10 @@ export function RetroHeader({
           ) : (
             <button
               type="button"
-              onClick={onResetWorkspace}
-              disabled={!hasWorkspaceContent}
+              onClick={onCycleSample}
               className="retro-btn px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0"
             >
-              Reset Studio
+              Try Sample
             </button>
           )}
         </div>
