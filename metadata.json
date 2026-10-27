@@ -1,0 +1,6 @@
+{
+  "name": "TalkLikeUS",
+  "description": "An authentic 1990s-inspired American English voice transformation studio that rewrites your text into four distinct American voices while preserving your exact meaning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
