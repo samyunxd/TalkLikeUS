@@ -385,64 +385,107 @@ var ServiceError = class extends Error {
   }
 };
 var DEFAULT_PRIMARY_MODEL = "gemini-3.8-flash";
-var GEMINI_FALLBACK_MODELS = [
-  "gemini-3.1-flash-lite",
-  "gemini-flash-latest",
-  "gemini-2.5-flash"
-];
-var VERTEX_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3.1-flash-lite"];
+var FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-latest"];
+var PLACEHOLDER_KEYS = /* @__PURE__ */ new Set([
+  "my_gemini_api_key",
+  "your_gemini_api_key_here",
+  "your_api_key_here",
+  "<your_gemini_api_key>",
+  "changeme"
+]);
 var modelCooldownUntil = /* @__PURE__ */ new Map();
+var verifiedVertexModeByKey = /* @__PURE__ */ new Map();
 var COOLDOWN_MS = 3 * 60 * 1e3;
 var UNAVAILABLE_COOLDOWN_MS = 30 * 60 * 1e3;
-function resolveServerApiKey() {
-  const raw = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || "";
-  return raw.trim().replace(/^["']+|["']+$/g, "").trim();
+function sanitizeApiKeyValue(raw) {
+  if (!raw) return "";
+  let cleaned = raw.trim().replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, "").trim();
+  cleaned = cleaned.replace(/^(?:export\s+)?(?:GEMINI_API_KEY|GOOGLE_API_KEY|API_KEY)\s*=\s*/i, "").replace(/^bearer\s+/i, "").replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, "").replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
+  if (!cleaned || PLACEHOLDER_KEYS.has(cleaned.toLowerCase())) {
+    return "";
+  }
+  return cleaned;
 }
-function shouldUseVertexExpress(apiKey) {
+function resolveServerApiKey() {
+  const candidates = [
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.API_KEY
+  ];
+  for (const candidate of candidates) {
+    const sanitized = sanitizeApiKeyValue(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return "";
+}
+function isApiKeyConfigured() {
+  return resolveServerApiKey().length > 0;
+}
+function requireServerApiKey() {
+  const apiKey = resolveServerApiKey();
+  if (!apiKey) {
+    throw new ServiceError(
+      "GEMINI_API_KEY is not set in the server environment. Add GEMINI_API_KEY in Vercel -> Project Settings -> Environment Variables (for Production & Preview) and redeploy.",
+      503,
+      "MISSING_API_KEY",
+      false
+    );
+  }
+  return apiKey;
+}
+function getBackendModes(apiKey) {
   const explicitFlag = process.env.GOOGLE_GENAI_USE_VERTEXAI?.trim().toLowerCase();
-  if (explicitFlag === "true") return true;
-  if (explicitFlag === "false") return false;
-  return apiKey.startsWith("AQ.");
+  if (explicitFlag === "false") {
+    return [false];
+  }
+  if (explicitFlag === "true") {
+    return apiKey.startsWith("AQ.") ? [true, false] : [true];
+  }
+  const cachedMode = verifiedVertexModeByKey.get(apiKey);
+  if (cachedMode !== void 0) {
+    return apiKey.startsWith("AQ.") ? [cachedMode, !cachedMode] : [cachedMode];
+  }
+  if (apiKey.startsWith("AQ.")) {
+    return [false, true];
+  }
+  return [false];
 }
 function getConfiguredModel() {
   const configured = process.env.GEMINI_MODEL?.trim().replace(/^["']+|["']+$/g, "").trim();
   return configured && configured.length > 0 ? configured : DEFAULT_PRIMARY_MODEL;
 }
-function getCandidateModels() {
+function getModelCooldownKey(useVertex, model) {
+  return `${useVertex ? "vertex" : "gemini"}:${model}`;
+}
+function getCandidateModels(useVertex) {
   const primary = getConfiguredModel();
-  const apiKey = resolveServerApiKey();
-  const fallbacks = shouldUseVertexExpress(apiKey) ? VERTEX_FALLBACK_MODELS : GEMINI_FALLBACK_MODELS;
   const candidates = [primary];
-  for (const fallback of fallbacks) {
+  for (const fallback of FALLBACK_MODELS) {
     if (!candidates.includes(fallback)) {
       candidates.push(fallback);
     }
   }
   const now = Date.now();
-  const healthy = candidates.filter((m) => (modelCooldownUntil.get(m) || 0) <= now);
-  const cooled = candidates.filter((m) => (modelCooldownUntil.get(m) || 0) > now);
+  const healthy = candidates.filter(
+    (m) => (modelCooldownUntil.get(getModelCooldownKey(useVertex, m)) || 0) <= now
+  );
+  const cooled = candidates.filter(
+    (m) => (modelCooldownUntil.get(getModelCooldownKey(useVertex, m)) || 0) > now
+  );
   return [...healthy, ...cooled];
 }
 function buildThinkingConfig(model) {
   if (model === "gemini-3.1-flash-lite") {
     return { thinkingLevel: ThinkingLevel.MINIMAL };
   }
-  if (model.startsWith("gemini-3") || model.startsWith("gemini-4")) {
+  if (model.startsWith("gemini-3.") || model.startsWith("gemini-4")) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
   return void 0;
 }
-function getGenAIClient() {
-  const apiKey = resolveServerApiKey();
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "your_gemini_api_key_here") {
-    throw new ServiceError(
-      "Gemini API key is not configured on the server. Set GEMINI_API_KEY in your Vercel Project Settings -> Environment Variables (or Secrets panel).",
-      503,
-      "MISSING_API_KEY",
-      false
-    );
-  }
-  const useVertex = shouldUseVertexExpress(apiKey);
+function createGenAIClient(apiKey, useVertex) {
   return new GoogleGenAI({
     apiKey,
     ...useVertex ? { vertexai: true } : {},
@@ -450,7 +493,7 @@ function getGenAIClient() {
       headers: {
         "User-Agent": "aistudio-build"
       },
-      timeout: 28e3,
+      timeout: 2e4,
       retryOptions: {
         attempts: 1
       }
@@ -605,19 +648,70 @@ function sanitizeExplanations(raw) {
   }
   return cleaned.slice(0, 6);
 }
+function isUnrecoverableKeyRestrictionError(err) {
+  const upper = (err instanceof Error ? err.message : String(err)).toUpperCase();
+  return upper.includes("REPORTED AS LEAKED") || upper.includes("COMPROMISED") || upper.includes("API_KEY_HTTP_REFERRER_BLOCKED") || upper.includes("HTTP REFERRER") || upper.includes("REQUESTS FROM REFERER") || upper.includes("API_KEY_IP_ADDRESS_BLOCKED") || upper.includes("IP_ADDRESS_BLOCKED") || upper.includes("API_KEY_EXPIRED") || upper.includes("API KEY EXPIRED");
+}
+function isDefiniteCredentialOrProjectError(err) {
+  if (isUnrecoverableKeyRestrictionError(err)) return true;
+  const status = err?.status;
+  if (status === 401) return true;
+  const upper = (err instanceof Error ? err.message : String(err)).toUpperCase();
+  return upper.includes("API_KEY_INVALID") || upper.includes("INVALID API KEY") || upper.includes("API KEY NOT VALID") || upper.includes("API_KEY_SERVICE_BLOCKED") || upper.includes("SERVICE_DISABLED") || upper.includes("HAS NOT BEEN USED IN PROJECT") || upper.includes("CONSUMER_INVALID") || upper.includes("UNAUTHENTICATED");
+}
 function mapUpstreamError(err) {
   if (err instanceof ServiceError) return err;
   const message = err instanceof Error ? err.message : String(err);
   const upper = message.toUpperCase();
-  if (upper.includes("API_KEY_INVALID") || upper.includes("PERMISSION_DENIED") || upper.includes("INVALID API KEY") || upper.includes("403")) {
+  if (upper.includes("REPORTED AS LEAKED") || upper.includes("COMPROMISED")) {
     return new ServiceError(
-      "The Gemini API rejected the server credentials. Verify that GEMINI_API_KEY is valid in your server environment.",
+      "Google disabled this API key because it was exposed publicly. Generate a new key in Google AI Studio, update GEMINI_API_KEY in Vercel Environment Variables, and redeploy.",
       401,
       "INVALID_API_KEY",
       false
     );
   }
-  if (upper.includes("RESOURCE_EXHAUSTED") || upper.includes("429") || upper.includes("QUOTA")) {
+  if (upper.includes("API_KEY_HTTP_REFERRER_BLOCKED") || upper.includes("HTTP REFERRER") || upper.includes("REQUESTS FROM REFERER")) {
+    return new ServiceError(
+      'This Gemini API key has website (HTTP referrer) restrictions enabled, which blocks server-side Vercel requests. Set Application restrictions to "None" for this key in Google AI Studio / Cloud Console.',
+      401,
+      "INVALID_API_KEY",
+      false
+    );
+  }
+  if (upper.includes("API_KEY_IP_ADDRESS_BLOCKED") || upper.includes("IP_ADDRESS_BLOCKED")) {
+    return new ServiceError(
+      "This Gemini API key has IP address restrictions that block Vercel serverless functions. Remove IP restrictions on the key in Google Cloud Console.",
+      401,
+      "INVALID_API_KEY",
+      false
+    );
+  }
+  if (upper.includes("API_KEY_SERVICE_BLOCKED") || upper.includes("SERVICE_DISABLED") || upper.includes("HAS NOT BEEN USED IN PROJECT")) {
+    return new ServiceError(
+      "The Generative Language API is disabled for this key\u2019s Google Cloud project. Enable the Generative Language API in Google Cloud Console or create a new key in Google AI Studio.",
+      401,
+      "INVALID_API_KEY",
+      false
+    );
+  }
+  if (upper.includes("API_KEY_EXPIRED") || upper.includes("API KEY EXPIRED")) {
+    return new ServiceError(
+      "The configured GEMINI_API_KEY has expired. Generate a fresh key in Google AI Studio, update Vercel Environment Variables, and redeploy.",
+      401,
+      "INVALID_API_KEY",
+      false
+    );
+  }
+  if (upper.includes("API_KEY_INVALID") || upper.includes("PERMISSION_DENIED") || upper.includes("UNAUTHENTICATED") || upper.includes("INVALID API KEY") || upper.includes("API KEY NOT VALID") || /\b401\b/.test(upper) || /\b403\b/.test(upper)) {
+    return new ServiceError(
+      "The Gemini API rejected GEMINI_API_KEY. Generate a valid key in Google AI Studio, save it as GEMINI_API_KEY in Vercel -> Project Settings -> Environment Variables (without quotes), and trigger a Redeploy.",
+      401,
+      "INVALID_API_KEY",
+      false
+    );
+  }
+  if (upper.includes("RESOURCE_EXHAUSTED") || /\b429\b/.test(upper) || upper.includes("QUOTA")) {
     return new ServiceError(
       "Rate limit or quota reached on the Gemini service. Wait a few seconds and click Retry.",
       429,
@@ -625,7 +719,7 @@ function mapUpstreamError(err) {
       true
     );
   }
-  if (upper.includes("UNAVAILABLE") || upper.includes("OVERLOADED") || upper.includes("503") || upper.includes("504") || upper.includes("DEADLINE_EXCEEDED") || upper.includes("TIMEOUT") || upper.includes("ABORT")) {
+  if (upper.includes("UNAVAILABLE") || upper.includes("OVERLOADED") || /\b503\b/.test(upper) || /\b504\b/.test(upper) || upper.includes("DEADLINE_EXCEEDED") || upper.includes("TIMEOUT") || upper.includes("ABORT")) {
     return new ServiceError(
       "The Gemini language service is temporarily busy. Please try again in a moment.",
       503,
@@ -649,44 +743,76 @@ function mapUpstreamError(err) {
   );
 }
 function isModelUnavailableOnKey(err) {
+  if (isDefiniteCredentialOrProjectError(err)) return false;
   const status = err?.status;
-  if (status === 404) return true;
+  if (status === 404 || status === 403) return true;
   const message = (err instanceof Error ? err.message : String(err)).toUpperCase();
-  return message.includes("NOT_FOUND") || message.includes("NOT FOUND") || message.includes("PUBLISHER MODEL") || message.includes("UNKNOWN MODEL") || message.includes("INVALID MODEL") || message.includes("MODEL IS NOT SUPPORTED") || message.includes("DOES NOT EXIST") || message.includes("DOES NOT HAVE ACCESS") || message.includes("NOT SUPPORTED FOR GENERATECONTENT") || /\b404\b/.test(message);
+  return message.includes("NOT_FOUND") || message.includes("NOT FOUND") || message.includes("NO LONGER AVAILABLE") || message.includes("PUBLISHER MODEL") || message.includes("UNKNOWN MODEL") || message.includes("INVALID MODEL") || message.includes("MODEL IS NOT SUPPORTED") || message.includes("DOES NOT EXIST") || message.includes("DOES NOT HAVE ACCESS") || message.includes("NOT SUPPORTED FOR GENERATECONTENT") || message.includes("PERMISSION_DENIED") || /\b404\b/.test(message) || /\b403\b/.test(message);
 }
 async function executeAcrossCandidateModels(operation) {
-  const candidates = getCandidateModels();
+  const apiKey = requireServerApiKey();
+  const backendModes = getBackendModes(apiKey);
+  let primaryBackendError;
   let lastError;
-  for (const model of candidates) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await operation(model);
-        return { data, usedModel: model };
-      } catch (err) {
-        lastError = err;
-        if (isModelUnavailableOnKey(err) && candidates.length > 1) {
-          modelCooldownUntil.set(model, Date.now() + UNAVAILABLE_COOLDOWN_MS);
-          break;
+  for (let modeIdx = 0; modeIdx < backendModes.length; modeIdx++) {
+    const useVertex = backendModes[modeIdx];
+    const hasAlternateBackend = modeIdx + 1 < backendModes.length;
+    const ai = createGenAIClient(apiKey, useVertex);
+    const candidates = getCandidateModels(useVertex);
+    let switchToAlternateBackend = false;
+    for (const model of candidates) {
+      const cooldownKey = getModelCooldownKey(useVertex, model);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const data = await operation(ai, model);
+          verifiedVertexModeByKey.set(apiKey, useVertex);
+          return { data, usedModel: model };
+        } catch (err) {
+          lastError = err;
+          if (modeIdx === 0 && primaryBackendError === void 0) {
+            primaryBackendError = err;
+          }
+          if (isUnrecoverableKeyRestrictionError(err)) {
+            throw mapUpstreamError(err);
+          }
+          if (isDefiniteCredentialOrProjectError(err)) {
+            if (hasAlternateBackend) {
+              switchToAlternateBackend = true;
+              break;
+            }
+            throw mapUpstreamError(primaryBackendError ?? err);
+          }
+          if (isModelUnavailableOnKey(err) && candidates.length > 1) {
+            modelCooldownUntil.set(cooldownKey, Date.now() + UNAVAILABLE_COOLDOWN_MS);
+            break;
+          }
+          const mapped = mapUpstreamError(err);
+          if (!mapped.retryable) {
+            if (mapped.code === "INVALID_API_KEY" && hasAlternateBackend) {
+              switchToAlternateBackend = true;
+              break;
+            }
+            throw mapped;
+          }
+          if (mapped.code === "MODEL_OVERLOADED" && candidates.length > 1) {
+            modelCooldownUntil.set(cooldownKey, Date.now() + COOLDOWN_MS);
+            break;
+          }
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 400 + Math.floor(Math.random() * 200)));
+          }
         }
-        const mapped = mapUpstreamError(err);
-        if (!mapped.retryable) {
-          throw mapped;
-        }
-        if (mapped.code === "MODEL_OVERLOADED" && candidates.length > 1) {
-          modelCooldownUntil.set(model, Date.now() + COOLDOWN_MS);
-          break;
-        }
-        if (attempt === 0) {
-          await new Promise((r) => setTimeout(r, 450 + Math.floor(Math.random() * 200)));
-        }
+      }
+      if (switchToAlternateBackend) {
+        break;
       }
     }
   }
-  throw mapUpstreamError(lastError);
+  throw mapUpstreamError(primaryBackendError ?? lastError);
 }
 async function generateSingleModeChunk(params) {
-  const { ai, sourceText, mode, teachMe, chatMode, previousResult, otherResults, chunk } = params;
-  const { data, usedModel } = await executeAcrossCandidateModels(async (model) => {
+  const { sourceText, mode, teachMe, chatMode, previousResult, otherResults, chunk } = params;
+  const { data, usedModel } = await executeAcrossCandidateModels(async (ai, model) => {
     const thinkingConfig = buildThinkingConfig(model);
     const response = await ai.models.generateContent({
       model,
@@ -739,43 +865,45 @@ async function generateSingleModeChunk(params) {
   return { item: data, usedModel };
 }
 async function generateAllModesChunk(params) {
-  const { ai, chunk, teachMe, chatMode } = params;
+  const { chunk, teachMe, chatMode } = params;
   const partialMap = {};
   let activeModel = getConfiguredModel();
   try {
-    const { data: parsedResults, usedModel } = await executeAcrossCandidateModels(async (model) => {
-      const thinkingConfig = buildThinkingConfig(model);
-      const response = await ai.models.generateContent({
-        model,
-        contents: buildTransformAllPrompt(chunk.content, teachMe, chatMode, chunk),
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.8,
-          responseMimeType: "application/json",
-          responseSchema: ALL_MODES_SCHEMA,
-          safetySettings: SAFETY_SETTINGS,
-          ...thinkingConfig ? { thinkingConfig } : {}
+    const { data: parsedResults, usedModel } = await executeAcrossCandidateModels(
+      async (ai, model) => {
+        const thinkingConfig = buildThinkingConfig(model);
+        const response = await ai.models.generateContent({
+          model,
+          contents: buildTransformAllPrompt(chunk.content, teachMe, chatMode, chunk),
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            temperature: 0.8,
+            responseMimeType: "application/json",
+            responseSchema: ALL_MODES_SCHEMA,
+            safetySettings: SAFETY_SETTINGS,
+            ...thinkingConfig ? { thinkingConfig } : {}
+          }
+        });
+        const rawText = response.text?.trim();
+        if (!rawText) {
+          const blockReason = response.promptFeedback?.blockReason;
+          if (blockReason) {
+            throw new ServiceError(
+              "This input was blocked by provider safety controls.",
+              422,
+              "SAFETY_BLOCKED",
+              false
+            );
+          }
+          throw new Error("Empty model response");
         }
-      });
-      const rawText = response.text?.trim();
-      if (!rawText) {
-        const blockReason = response.promptFeedback?.blockReason;
-        if (blockReason) {
-          throw new ServiceError(
-            "This input was blocked by provider safety controls.",
-            422,
-            "SAFETY_BLOCKED",
-            false
-          );
+        const parsed = JSON.parse(rawText);
+        if (!Array.isArray(parsed?.results)) {
+          throw new Error("Malformed results array in structured output");
         }
-        throw new Error("Empty model response");
+        return parsed.results;
       }
-      const parsed = JSON.parse(rawText);
-      if (!Array.isArray(parsed?.results)) {
-        throw new Error("Malformed results array in structured output");
-      }
-      return parsed.results;
-    });
+    );
     activeModel = usedModel;
     for (const item of parsedResults) {
       const modeId = typeof item.mode === "string" ? item.mode.trim() : void 0;
@@ -801,7 +929,6 @@ async function generateAllModesChunk(params) {
     const recovered = await Promise.all(
       missingModes.map(
         (mode) => generateSingleModeChunk({
-          ai,
           sourceText: chunk.content,
           mode,
           teachMe,
@@ -821,13 +948,12 @@ async function generateAllModesChunk(params) {
   };
 }
 async function transformAllModes(sourceText, teachMe, chatMode = false) {
-  const ai = getGenAIClient();
+  requireServerApiKey();
   const chunks = splitIntoMeaningPreservingChunks(sourceText);
   const chunkOutputs = [];
   let usedModel = getConfiguredModel();
   for (const chunk of chunks) {
     const chunkRes = await generateAllModesChunk({
-      ai,
       chunk,
       teachMe,
       chatMode
@@ -866,13 +992,12 @@ async function transformAllModes(sourceText, teachMe, chatMode = false) {
 }
 async function regenerateSingleMode(params) {
   const { sourceText, mode, teachMe, chatMode = false, previousResult, otherResults } = params;
-  const ai = getGenAIClient();
+  requireServerApiKey();
   const chunks = splitIntoMeaningPreservingChunks(sourceText);
   const chunkResults = [];
   let usedModel = getConfiguredModel();
   for (const chunk of chunks) {
     const singleChunkRes = await generateSingleModeChunk({
-      ai,
       sourceText: chunk.content,
       mode,
       teachMe,
@@ -910,7 +1035,7 @@ async function regenerateSingleMode(params) {
   };
 }
 async function explainExistingResults(originalText, currentResults, chatMode = false) {
-  const ai = getGenAIClient();
+  requireServerApiKey();
   const boundedSource = originalText.slice(0, 4500);
   const boundedResults = {
     natural_american: (currentResults.natural_american || "").slice(0, 4500),
@@ -918,7 +1043,7 @@ async function explainExistingResults(originalText, currentResults, chatMode = f
     unfiltered_blunt: (currentResults.unfiltered_blunt || "").slice(0, 4500),
     badass_confident: (currentResults.badass_confident || "").slice(0, 4500)
   };
-  const { data: items } = await executeAcrossCandidateModels(async (model) => {
+  const { data: items } = await executeAcrossCandidateModels(async (ai, model) => {
     const thinkingConfig = buildThinkingConfig(model);
     const response = await ai.models.generateContent({
       model,
@@ -1097,6 +1222,7 @@ function createApiApp(options = {}) {
   app2.get("/api/health", (_req, res) => {
     res.json({
       ok: true,
+      configured: isApiKeyConfigured(),
       model: getConfiguredModel(),
       maxChars: MAX_INPUT_CHARS
     });
@@ -1207,3 +1333,4 @@ export const config = {
 };
 const app = createApiApp({ normalizeServerlessPaths: true });
 export default app;
+

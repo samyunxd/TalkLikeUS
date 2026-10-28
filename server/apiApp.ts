@@ -6,6 +6,7 @@ import {
   ServiceError,
   explainExistingResults,
   getConfiguredModel,
+  isApiKeyConfigured,
   regenerateSingleMode,
   transformAllModes,
 } from './geminiService.ts';
@@ -186,6 +187,7 @@ export function createApiApp(options: CreateApiAppOptions = {}): Express {
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       ok: true,
+      configured: isApiKeyConfigured(),
       model: getConfiguredModel(),
       maxChars: MAX_INPUT_CHARS,
     });

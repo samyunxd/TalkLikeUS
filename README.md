@@ -12,8 +12,9 @@ A 1990s-inspired American English voice transformation studio that rewrites text
    - **Output Directory:** `dist`
 4. In Vercel **Project Settings -> Environment Variables**, add:
    - **Key:** `GEMINI_API_KEY`
-   - **Value:** your Gemini API key (`AIza...`) or Vertex AI Express key (`AQ....`), without quotes
-5. Trigger a new deployment from the latest `main` commit (or push to `main`).
+   - **Value:** your Gemini API key (`AIza...` or `AQ....`), pasted directly without quotes (ensure key Application restrictions are set to **None** so server-side requests are allowed)
+   - **Environments:** Production, Preview, and Development
+5. Trigger a **Redeploy** from the latest `main` commit so serverless functions pick up the environment variable and updated API bundle.
 
 ## Local Development
 
