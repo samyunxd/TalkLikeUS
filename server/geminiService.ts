@@ -53,21 +53,48 @@ export class ServiceError extends Error {
 }
 
 const DEFAULT_PRIMARY_MODEL = 'gemini-3.8-flash';
-const FALLBACK_MODELS = ['gemini-3.1-flash-lite', 'gemini-flash-latest'] as const;
+const GEMINI_FALLBACK_MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+] as const;
+const VERTEX_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-3.1-flash-lite'] as const;
 
 const modelCooldownUntil = new Map<string, number>();
 const COOLDOWN_MS = 3 * 60 * 1000;
 const UNAVAILABLE_COOLDOWN_MS = 30 * 60 * 1000;
 
+function resolveServerApiKey(): string {
+  const raw =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY ||
+    '';
+  return raw.trim().replace(/^["']+|["']+$/g, '').trim();
+}
+
+function shouldUseVertexExpress(apiKey: string): boolean {
+  const explicitFlag = process.env.GOOGLE_GENAI_USE_VERTEXAI?.trim().toLowerCase();
+  if (explicitFlag === 'true') return true;
+  if (explicitFlag === 'false') return false;
+  // Keys prefixed with "AQ." are Google Cloud Vertex AI Express Mode API keys.
+  return apiKey.startsWith('AQ.');
+}
+
 export function getConfiguredModel(): string {
-  const configured = process.env.GEMINI_MODEL?.trim();
+  const configured = process.env.GEMINI_MODEL?.trim().replace(/^["']+|["']+$/g, '').trim();
   return configured && configured.length > 0 ? configured : DEFAULT_PRIMARY_MODEL;
 }
 
 function getCandidateModels(): string[] {
   const primary = getConfiguredModel();
+  const apiKey = resolveServerApiKey();
+  const fallbacks = shouldUseVertexExpress(apiKey)
+    ? VERTEX_FALLBACK_MODELS
+    : GEMINI_FALLBACK_MODELS;
+
   const candidates = [primary];
-  for (const fallback of FALLBACK_MODELS) {
+  for (const fallback of fallbacks) {
     if (!candidates.includes(fallback)) {
       candidates.push(fallback);
     }
@@ -89,17 +116,19 @@ function buildThinkingConfig(model: string): GenerateContentConfig['thinkingConf
 }
 
 function getGenAIClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+  const apiKey = resolveServerApiKey();
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'your_gemini_api_key_here') {
     throw new ServiceError(
-      'Gemini API key is not configured on the server. Set GEMINI_API_KEY in your environment variables or Secrets panel.',
+      'Gemini API key is not configured on the server. Set GEMINI_API_KEY in your Vercel Project Settings -> Environment Variables (or Secrets panel).',
       503,
       'MISSING_API_KEY',
       false
     );
   }
+  const useVertex = shouldUseVertexExpress(apiKey);
   return new GoogleGenAI({
     apiKey,
+    ...(useVertex ? { vertexai: true } : {}),
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
@@ -345,11 +374,14 @@ function mapUpstreamError(err: unknown): ServiceError {
 }
 
 function isModelUnavailableOnKey(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 404) return true;
   const message = (err instanceof Error ? err.message : String(err)).toUpperCase();
   return (
     message.includes('NOT_FOUND') ||
-    message.includes('IS NOT FOUND') ||
+    message.includes('NOT FOUND') ||
     message.includes('DOES NOT EXIST') ||
+    message.includes('DOES NOT HAVE ACCESS') ||
     message.includes('NOT SUPPORTED FOR GENERATECONTENT') ||
     /\b404\b/.test(message)
   );
