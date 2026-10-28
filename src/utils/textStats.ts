@@ -52,6 +52,7 @@ export function trimToSafeBoundary(text: string, limit = MAX_INPUT_CHARS): strin
 export interface SamplePrompt {
   id: string;
   label: string;
+  shortLabel: string;
   text: string;
 }
 
@@ -59,21 +60,25 @@ export const SAMPLE_PROMPTS: SamplePrompt[] = [
   {
     id: 'sudden',
     label: 'Sudden surprise',
+    shortLabel: 'Surprise',
     text: "I don't know what to say because this happened so suddenly, and nobody informed me ahead of time.",
   },
   {
     id: 'frustrated',
     label: 'Wasted time',
+    shortLabel: 'Wasted time',
     text: "I'm pissed off because they wasted my time for two weeks and didn't even bother telling me the meeting was canceled.",
   },
   {
     id: 'nuanced',
     label: 'Respectful disagreement',
+    shortLabel: 'Pushback',
     text: 'I disagree with the decision they made on the launch schedule, but I still respect the person who made it and understand why they were cautious.',
   },
   {
     id: 'casual_plans',
     label: 'Changing weekend plans',
+    shortLabel: 'Plans',
     text: 'I am very tired after working late all week, so I would prefer to stay at home tonight instead of going to the party, if you do not mind.',
   },
 ];

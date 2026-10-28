@@ -52,9 +52,24 @@ async function parseJsonOrThrow<T>(response: Response): Promise<T> {
   return body as T;
 }
 
+function buildNetworkErrorMessage(context: 'transform' | 'regen' | 'explain'): string {
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (isOffline) {
+    return 'You appear to be offline. Your text is safe—reconnect to the internet and tap Retry.';
+  }
+  if (context === 'regen') {
+    return 'Network connection interrupted during regeneration. Your existing results are safe—tap Retry.';
+  }
+  if (context === 'explain') {
+    return 'Could not load Teach Me notes due to a network interruption. Tap Retry in a moment.';
+  }
+  return 'Network connection interrupted. Your original text is safe—check your signal and tap Retry.';
+}
+
 export async function requestAllTransformations(params: {
   text: string;
   teachMe: boolean;
+  chatMode: boolean;
   signal?: AbortSignal;
 }): Promise<TransformResponse> {
   try {
@@ -64,6 +79,7 @@ export async function requestAllTransformations(params: {
       body: JSON.stringify({
         text: params.text,
         teachMe: params.teachMe,
+        chatMode: params.chatMode,
       }),
       signal: params.signal,
     });
@@ -76,7 +92,7 @@ export async function requestAllTransformations(params: {
       throw err;
     }
     throw new ClientApiError({
-      error: 'Network connection interrupted. Check your connection and click Retry.',
+      error: buildNetworkErrorMessage('transform'),
       code: 'UPSTREAM_ERROR',
       retryable: true,
     });
@@ -87,6 +103,7 @@ export async function requestSingleRegeneration(params: {
   text: string;
   mode: VoiceMode;
   teachMe: boolean;
+  chatMode: boolean;
   previousResult?: string;
   otherResults?: Partial<Record<VoiceMode, string>>;
   signal?: AbortSignal;
@@ -99,6 +116,7 @@ export async function requestSingleRegeneration(params: {
         text: params.text,
         mode: params.mode,
         teachMe: params.teachMe,
+        chatMode: params.chatMode,
         previousResult: params.previousResult,
         otherResults: params.otherResults,
       }),
@@ -113,7 +131,7 @@ export async function requestSingleRegeneration(params: {
       throw err;
     }
     throw new ClientApiError({
-      error: 'Network connection interrupted during regeneration. Please try again.',
+      error: buildNetworkErrorMessage('regen'),
       code: 'UPSTREAM_ERROR',
       retryable: true,
     });
@@ -123,6 +141,7 @@ export async function requestSingleRegeneration(params: {
 export async function requestTeachMeExplanations(params: {
   text: string;
   currentResults: Record<VoiceMode, string>;
+  chatMode: boolean;
   signal?: AbortSignal;
 }): Promise<ExplainResponse> {
   try {
@@ -132,6 +151,7 @@ export async function requestTeachMeExplanations(params: {
       body: JSON.stringify({
         text: params.text,
         currentResults: params.currentResults,
+        chatMode: params.chatMode,
       }),
       signal: params.signal,
     });
@@ -144,7 +164,7 @@ export async function requestTeachMeExplanations(params: {
       throw err;
     }
     throw new ClientApiError({
-      error: 'Could not load Teach Me notes due to a network error.',
+      error: buildNetworkErrorMessage('explain'),
       code: 'UPSTREAM_ERROR',
       retryable: true,
     });

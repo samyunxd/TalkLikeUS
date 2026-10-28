@@ -53,11 +53,11 @@ export class ServiceError extends Error {
 }
 
 const DEFAULT_PRIMARY_MODEL = 'gemini-3.8-flash';
-const FALLBACK_ACTIVE_MODEL = 'gemini-3.1-flash-lite';
+const FALLBACK_MODELS = ['gemini-3.1-flash-lite', 'gemini-flash-latest'] as const;
 
-// Short circuit-breaker cooldown (3 min) when an upstream model reports 503 high demand
 const modelCooldownUntil = new Map<string, number>();
 const COOLDOWN_MS = 3 * 60 * 1000;
+const UNAVAILABLE_COOLDOWN_MS = 30 * 60 * 1000;
 
 export function getConfiguredModel(): string {
   const configured = process.env.GEMINI_MODEL?.trim();
@@ -67,11 +67,12 @@ export function getConfiguredModel(): string {
 function getCandidateModels(): string[] {
   const primary = getConfiguredModel();
   const candidates = [primary];
-  if (primary !== FALLBACK_ACTIVE_MODEL) {
-    candidates.push(FALLBACK_ACTIVE_MODEL);
+  for (const fallback of FALLBACK_MODELS) {
+    if (!candidates.includes(fallback)) {
+      candidates.push(fallback);
+    }
   }
   const now = Date.now();
-  // Prefer models not currently in temporary 503 demand-spike cooldown, keeping cooled models as last resort
   const healthy = candidates.filter((m) => (modelCooldownUntil.get(m) || 0) <= now);
   const cooled = candidates.filter((m) => (modelCooldownUntil.get(m) || 0) > now);
   return [...healthy, ...cooled];
@@ -91,7 +92,7 @@ function getGenAIClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     throw new ServiceError(
-      'Gemini API key is not configured on the server. Please verify GEMINI_API_KEY in the Settings > Secrets panel.',
+      'Gemini API key is not configured on the server. Set GEMINI_API_KEY in your environment variables or Secrets panel.',
       503,
       'MISSING_API_KEY',
       false
@@ -120,7 +121,7 @@ const EXPLANATION_ITEM_SCHEMA = {
     },
     replacement: {
       type: Type.STRING,
-      description: 'Exact phrase used in this transformed American output.',
+      description: 'Exact phrase or abbreviation used in this transformed American output.',
     },
     reason: {
       type: Type.STRING,
@@ -293,7 +294,7 @@ function mapUpstreamError(err: unknown): ServiceError {
     upper.includes('403')
   ) {
     return new ServiceError(
-      'The Gemini API rejected the server credentials. Please check your API key in Settings > Secrets.',
+      'The Gemini API rejected the server credentials. Verify that GEMINI_API_KEY is valid in your server environment.',
       401,
       'INVALID_API_KEY',
       false
@@ -343,6 +344,17 @@ function mapUpstreamError(err: unknown): ServiceError {
   );
 }
 
+function isModelUnavailableOnKey(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toUpperCase();
+  return (
+    message.includes('NOT_FOUND') ||
+    message.includes('IS NOT FOUND') ||
+    message.includes('DOES NOT EXIST') ||
+    message.includes('NOT SUPPORTED FOR GENERATECONTENT') ||
+    /\b404\b/.test(message)
+  );
+}
+
 async function executeAcrossCandidateModels<T>(
   operation: (model: string) => Promise<T>
 ): Promise<{ data: T; usedModel: string }> {
@@ -356,14 +368,18 @@ async function executeAcrossCandidateModels<T>(
         return { data, usedModel: model };
       } catch (err) {
         lastError = err;
+
+        if (isModelUnavailableOnKey(err) && candidates.length > 1) {
+          modelCooldownUntil.set(model, Date.now() + UNAVAILABLE_COOLDOWN_MS);
+          break;
+        }
+
         const mapped = mapUpstreamError(err);
 
-        // Non-retryable credential or safety error: stop immediately
         if (!mapped.retryable) {
           throw mapped;
         }
 
-        // If upstream model is experiencing a 503/504 demand spike and we have a fallback model, mark cooldown and switch immediately
         if (mapped.code === 'MODEL_OVERLOADED' && candidates.length > 1) {
           modelCooldownUntil.set(model, Date.now() + COOLDOWN_MS);
           break;
@@ -384,11 +400,12 @@ async function generateSingleModeChunk(params: {
   sourceText: string;
   mode: VoiceMode;
   teachMe: boolean;
+  chatMode: boolean;
   previousResult?: string;
   otherResults?: Partial<Record<VoiceMode, string>>;
   chunk?: ReturnType<typeof splitIntoMeaningPreservingChunks>[number];
 }): Promise<{ item: ModeTransformation; usedModel: string }> {
-  const { ai, sourceText, mode, teachMe, previousResult, otherResults, chunk } = params;
+  const { ai, sourceText, mode, teachMe, chatMode, previousResult, otherResults, chunk } = params;
 
   const { data, usedModel } = await executeAcrossCandidateModels(async (model) => {
     const thinkingConfig = buildThinkingConfig(model);
@@ -398,6 +415,7 @@ async function generateSingleModeChunk(params: {
         sourceText,
         mode,
         teachMe,
+        chatMode,
         previousResult,
         otherResults,
         chunk,
@@ -445,6 +463,7 @@ async function generateSingleModeChunk(params: {
         teachMe && typeof resObj?.reusablePattern === 'string'
           ? resObj.reusablePattern.trim()
           : undefined,
+      chatMode,
     } satisfies ModeTransformation;
   });
 
@@ -455,8 +474,9 @@ async function generateAllModesChunk(params: {
   ai: GoogleGenAI;
   chunk: ReturnType<typeof splitIntoMeaningPreservingChunks>[number];
   teachMe: boolean;
+  chatMode: boolean;
 }): Promise<{ map: Record<VoiceMode, ModeTransformation>; usedModel: string }> {
-  const { ai, chunk, teachMe } = params;
+  const { ai, chunk, teachMe, chatMode } = params;
 
   const partialMap: Partial<Record<VoiceMode, ModeTransformation>> = {};
   let activeModel = getConfiguredModel();
@@ -466,7 +486,7 @@ async function generateAllModesChunk(params: {
       const thinkingConfig = buildThinkingConfig(model);
       const response = await ai.models.generateContent({
         model,
-        contents: buildTransformAllPrompt(chunk.content, teachMe, chunk),
+        contents: buildTransformAllPrompt(chunk.content, teachMe, chatMode, chunk),
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           temperature: 0.8,
@@ -516,6 +536,7 @@ async function generateAllModesChunk(params: {
             teachMe && typeof item.reusablePattern === 'string'
               ? item.reusablePattern.trim()
               : undefined,
+          chatMode,
         };
       }
     }
@@ -541,6 +562,7 @@ async function generateAllModesChunk(params: {
           sourceText: chunk.content,
           mode,
           teachMe,
+          chatMode,
           chunk,
         })
       )
@@ -559,7 +581,8 @@ async function generateAllModesChunk(params: {
 
 export async function transformAllModes(
   sourceText: string,
-  teachMe: boolean
+  teachMe: boolean,
+  chatMode = false
 ): Promise<TransformResponse> {
   const ai = getGenAIClient();
   const chunks = splitIntoMeaningPreservingChunks(sourceText);
@@ -572,6 +595,7 @@ export async function transformAllModes(
       ai,
       chunk,
       teachMe,
+      chatMode,
     });
     chunkOutputs.push(chunkRes.map);
     usedModel = chunkRes.usedModel;
@@ -601,6 +625,7 @@ export async function transformAllModes(
       explanations: teachMe ? mergedExplanations.slice(0, 6) : [],
       toneSummary: teachMe ? chunkOutputs[0]?.[mode]?.toneSummary : undefined,
       reusablePattern: teachMe ? chunkOutputs[0]?.[mode]?.reusablePattern : undefined,
+      chatMode,
     };
   });
 
@@ -608,6 +633,7 @@ export async function transformAllModes(
     results: finalResults,
     chunkCount: chunks.length,
     model: usedModel,
+    chatMode,
   };
 }
 
@@ -615,10 +641,11 @@ export async function regenerateSingleMode(params: {
   sourceText: string;
   mode: VoiceMode;
   teachMe: boolean;
+  chatMode?: boolean;
   previousResult?: string;
   otherResults?: Partial<Record<VoiceMode, string>>;
 }): Promise<SingleModeResponse> {
-  const { sourceText, mode, teachMe, previousResult, otherResults } = params;
+  const { sourceText, mode, teachMe, chatMode = false, previousResult, otherResults } = params;
   const ai = getGenAIClient();
   const chunks = splitIntoMeaningPreservingChunks(sourceText);
 
@@ -631,6 +658,7 @@ export async function regenerateSingleMode(params: {
       sourceText: chunk.content,
       mode,
       teachMe,
+      chatMode,
       previousResult: chunks.length === 1 ? previousResult : undefined,
       otherResults: chunks.length === 1 ? otherResults : undefined,
       chunk,
@@ -663,6 +691,7 @@ export async function regenerateSingleMode(params: {
       explanations: teachMe ? mergedExplanations.slice(0, 6) : [],
       toneSummary: teachMe ? chunkResults[0]?.toneSummary : undefined,
       reusablePattern: teachMe ? chunkResults[0]?.reusablePattern : undefined,
+      chatMode,
     },
     chunkCount: chunks.length,
     model: usedModel,
@@ -671,7 +700,8 @@ export async function regenerateSingleMode(params: {
 
 export async function explainExistingResults(
   originalText: string,
-  currentResults: Record<VoiceMode, string>
+  currentResults: Record<VoiceMode, string>,
+  chatMode = false
 ): Promise<ExplainResponse> {
   const ai = getGenAIClient();
 
@@ -687,7 +717,7 @@ export async function explainExistingResults(
     const thinkingConfig = buildThinkingConfig(model);
     const response = await ai.models.generateContent({
       model,
-      contents: buildExplainExistingPrompt(boundedSource, boundedResults),
+      contents: buildExplainExistingPrompt(boundedSource, boundedResults, chatMode),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.4,

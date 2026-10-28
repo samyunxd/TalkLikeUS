@@ -33,15 +33,19 @@ export interface ExplanationNote {
 export interface ModeTransformation {
   mode: VoiceMode;
   text: string;
+  generatedText?: string;
+  isEdited?: boolean;
   explanations: ExplanationNote[];
   toneSummary?: string;
   reusablePattern?: string;
+  chatMode?: boolean;
 }
 
 export interface TransformResponse {
   results: ModeTransformation[];
   chunkCount?: number;
   model?: string;
+  chatMode?: boolean;
 }
 
 export interface SingleModeResponse {
@@ -59,11 +63,6 @@ export interface ExplainResponse {
       reusablePattern?: string;
     }
   >;
-}
-
-export interface EditableModeState extends ModeTransformation {
-  aiOriginalText: string;
-  isEdited: boolean;
 }
 
 export interface ApiErrorPayload {

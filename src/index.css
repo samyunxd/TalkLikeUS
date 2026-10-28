@@ -12,6 +12,8 @@
     background-color: #eae6d7;
     color: #141b29;
     scroll-behavior: smooth;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -33,11 +35,33 @@
     background-image: radial-gradient(#d5d0be 1px, transparent 1px);
     background-size: 16px 16px;
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
   }
 
   :focus-visible {
     outline: 2px dotted #0000ee;
     outline-offset: 2px;
+  }
+}
+
+/* Safe-area horizontal padding for notched phones in portrait & landscape */
+.safe-area-x {
+  padding-left: max(0.625rem, env(safe-area-inset-left));
+  padding-right: max(0.625rem, env(safe-area-inset-right));
+}
+
+@media (min-width: 375px) {
+  .safe-area-x {
+    padding-left: max(0.875rem, env(safe-area-inset-left));
+    padding-right: max(0.875rem, env(safe-area-inset-right));
+  }
+}
+
+@media (min-width: 640px) {
+  .safe-area-x {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
   }
 }
 
@@ -48,7 +72,16 @@
   box-shadow:
     inset 1px 1px 0 #ffffff,
     inset -1px -1px 0 #bfb9a6,
-    4px 4px 0 #141b29;
+    3px 3px 0 #141b29;
+}
+
+@media (min-width: 640px) {
+  .retro-window {
+    box-shadow:
+      inset 1px 1px 0 #ffffff,
+      inset -1px -1px 0 #bfb9a6,
+      4px 4px 0 #141b29;
+  }
 }
 
 /* Recessed white document text well */
@@ -60,7 +93,7 @@
     inset -1px -1px 0 #f8f6ef;
 }
 
-/* Tactile 1990s raised button */
+/* Tactile 1990s raised button — optimized for touch & pointer */
 .retro-btn {
   font-family: var(--font-mono);
   background-color: #e5e0d0;
@@ -72,10 +105,15 @@
     2px 2px 0 #141b29;
   transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-.retro-btn:hover:not(:disabled) {
-  background-color: #efeadd;
+@media (hover: hover) {
+  .retro-btn:hover:not(:disabled) {
+    background-color: #efeadd;
+  }
 }
 
 .retro-btn:active:not(:disabled) {
@@ -100,17 +138,22 @@
   box-shadow:
     inset 2px 2px 0 #ff7575,
     inset -2px -2px 0 #8f1111,
-    3px 3px 0 #141b29;
+    2px 2px 0 #141b29;
   transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-.retro-btn-primary:hover:not(:disabled) {
-  background-color: #c21b1b;
+@media (hover: hover) {
+  .retro-btn-primary:hover:not(:disabled) {
+    background-color: #c21b1b;
+  }
 }
 
 .retro-btn-primary:active:not(:disabled) {
-  transform: translate(2px, 2px);
+  transform: translate(1px, 1px);
   box-shadow:
     inset 2px 2px 0 #8f1111,
     inset -1px -1px 0 #ff7575,
@@ -128,10 +171,14 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.retro-link:hover {
-  color: #551a8b;
+@media (hover: hover) {
+  .retro-link:hover {
+    color: #551a8b;
+  }
 }
 
 .retro-link-active {
@@ -139,6 +186,8 @@
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Retro Progress Striped Bar */
