@@ -380,6 +380,10 @@ function isModelUnavailableOnKey(err: unknown): boolean {
   return (
     message.includes('NOT_FOUND') ||
     message.includes('NOT FOUND') ||
+    message.includes('PUBLISHER MODEL') ||
+    message.includes('UNKNOWN MODEL') ||
+    message.includes('INVALID MODEL') ||
+    message.includes('MODEL IS NOT SUPPORTED') ||
     message.includes('DOES NOT EXIST') ||
     message.includes('DOES NOT HAVE ACCESS') ||
     message.includes('NOT SUPPORTED FOR GENERATECONTENT') ||

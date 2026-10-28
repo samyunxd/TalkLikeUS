@@ -130,6 +130,53 @@ export function createApiApp(options: CreateApiAppOptions = {}): Express {
   if (options.normalizeServerlessPaths) {
     app.use((req: Request, _res: Response, next) => {
       req.url = normalizeServerlessRequestUrl(req.url || '/');
+
+      // Safely unwrap @vercel/node getter-based or pre-buffered req.body before express.json()
+      const bodyDescriptor = Object.getOwnPropertyDescriptor(req, 'body');
+      if (bodyDescriptor) {
+        let existingBody: unknown;
+        try {
+          existingBody = (req as { body?: unknown }).body;
+        } catch {
+          existingBody = undefined;
+        }
+
+        if (typeof existingBody === 'string') {
+          const trimmedBody = existingBody.trim();
+          if (trimmedBody.length > 0) {
+            try {
+              existingBody = JSON.parse(trimmedBody);
+            } catch {
+              // Leave as-is if non-JSON string
+            }
+          } else {
+            existingBody = {};
+          }
+        } else if (Buffer.isBuffer(existingBody)) {
+          const textBody = existingBody.toString('utf8').trim();
+          if (textBody.length > 0) {
+            try {
+              existingBody = JSON.parse(textBody);
+            } catch {
+              existingBody = {};
+            }
+          } else {
+            existingBody = {};
+          }
+        }
+
+        Object.defineProperty(req, 'body', {
+          value: existingBody,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+
+        if (existingBody !== undefined) {
+          (req as Request & { _body?: boolean })._body = true;
+        }
+      }
+
       next();
     });
   }
