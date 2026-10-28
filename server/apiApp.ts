@@ -88,10 +88,52 @@ function validateSourceText(raw: unknown, res: Response): string | null {
   return trimmed;
 }
 
-export function createApiApp(): Express {
+export interface CreateApiAppOptions {
+  normalizeServerlessPaths?: boolean;
+}
+
+function normalizeServerlessRequestUrl(rawUrl: string): string {
+  const parsed = new URL(rawUrl || '/', 'http://localhost');
+  const rewrittenSubpath = parsed.searchParams.get('__path');
+
+  if (
+    rewrittenSubpath !== null &&
+    (parsed.pathname === '/api' ||
+      parsed.pathname === '/api/' ||
+      parsed.pathname === '/api/index' ||
+      parsed.pathname === '/api/index.js' ||
+      parsed.pathname === '/index' ||
+      parsed.pathname === '/')
+  ) {
+    parsed.searchParams.delete('__path');
+    const cleanSubpath = rewrittenSubpath.replace(/^\/+/, '');
+    const search = parsed.searchParams.toString();
+    return `/api/${cleanSubpath}${search ? `?${search}` : ''}`;
+  }
+
+  if (parsed.searchParams.has('__path')) {
+    parsed.searchParams.delete('__path');
+  }
+
+  const normalizedPathname = parsed.pathname.startsWith('/api')
+    ? parsed.pathname
+    : `/api${parsed.pathname.startsWith('/') ? '' : '/'}${parsed.pathname}`;
+  const search = parsed.searchParams.toString();
+  return `${normalizedPathname}${search ? `?${search}` : ''}`;
+}
+
+export function createApiApp(options: CreateApiAppOptions = {}): Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+
+  if (options.normalizeServerlessPaths) {
+    app.use((req: Request, _res: Response, next) => {
+      req.url = normalizeServerlessRequestUrl(req.url || '/');
+      next();
+    });
+  }
+
   app.use(express.json({ limit: '256kb' }));
 
   app.get('/api/health', (_req: Request, res: Response) => {

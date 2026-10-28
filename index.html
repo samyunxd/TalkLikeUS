@@ -2,6 +2,143 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        if (typeof window === 'undefined') return;
+
+        function ensureWritableFetch(target) {
+          if (!target) return;
+          try {
+            var desc = Object.getOwnPropertyDescriptor(target, 'fetch');
+            if (
+              desc &&
+              typeof desc.get === 'function' &&
+              typeof desc.set !== 'function' &&
+              desc.configurable !== false
+            ) {
+              Object.defineProperty(target, 'fetch', {
+                configurable: true,
+                enumerable: desc.enumerable !== false,
+                get: desc.get,
+                set: function () {},
+              });
+            }
+          } catch (_e) {}
+        }
+
+        ensureWritableFetch(window);
+        if (typeof Window !== 'undefined' && Window.prototype) {
+          ensureWritableFetch(Window.prototype);
+        }
+
+        if (window.__talkLikeUsFetchGuardInstalled) return;
+        window.__talkLikeUsFetchGuardInstalled = true;
+
+        try {
+          var origDefineProperty = Object.defineProperty;
+          Object.defineProperty = function (target, prop, descriptor) {
+            if (
+              (target === window ||
+                target === globalThis ||
+                (typeof Window !== 'undefined' && target === Window.prototype)) &&
+              prop === 'fetch' &&
+              descriptor &&
+              typeof descriptor.get === 'function' &&
+              typeof descriptor.set === 'undefined'
+            ) {
+              descriptor = {
+                configurable: descriptor.configurable !== false,
+                enumerable: descriptor.enumerable !== false,
+                get: descriptor.get,
+                set: function () {},
+              };
+            }
+            return origDefineProperty.call(Object, target, prop, descriptor);
+          };
+        } catch (_e) {}
+
+        try {
+          if (typeof Reflect !== 'undefined' && typeof Reflect.defineProperty === 'function') {
+            var origReflectDefineProperty = Reflect.defineProperty;
+            Reflect.defineProperty = function (target, prop, descriptor) {
+              if (
+                (target === window ||
+                  target === globalThis ||
+                  (typeof Window !== 'undefined' && target === Window.prototype)) &&
+                prop === 'fetch' &&
+                descriptor &&
+                typeof descriptor.get === 'function' &&
+                typeof descriptor.set === 'undefined'
+              ) {
+                descriptor = {
+                  configurable: descriptor.configurable !== false,
+                  enumerable: descriptor.enumerable !== false,
+                  get: descriptor.get,
+                  set: function () {},
+                };
+              }
+              return origReflectDefineProperty.call(Reflect, target, prop, descriptor);
+            };
+          }
+        } catch (_e) {}
+
+        function isExtensionFetchError(message, filename) {
+          var msg = String(message || '');
+          var file = String(filename || '');
+          if (
+            msg.indexOf('Cannot set property fetch') !== -1 ||
+            (msg.indexOf('fetch') !== -1 && msg.indexOf('only a getter') !== -1)
+          ) {
+            return true;
+          }
+          if (
+            file.indexOf('chrome-extension://') === 0 ||
+            file.indexOf('moz-extension://') === 0 ||
+            file.indexOf('safari-web-extension://') === 0
+          ) {
+            return true;
+          }
+          return false;
+        }
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            if (!event) return;
+            var msg = event.message || (event.error && event.error.message) || '';
+            if (isExtensionFetchError(msg, event.filename)) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          },
+          true
+        );
+
+        window.addEventListener(
+          'unhandledrejection',
+          function (event) {
+            if (!event) return;
+            var reason = event.reason;
+            var msg =
+              typeof reason === 'string'
+                ? reason
+                : reason && typeof reason.message === 'string'
+                  ? reason.message
+                  : '';
+            var stack = reason && typeof reason.stack === 'string' ? reason.stack : '';
+            var extOnly =
+              stack.indexOf('chrome-extension://') !== -1 &&
+              stack.indexOf('/src/') === -1 &&
+              stack.indexOf('/assets/') === -1;
+            if (isExtensionFetchError(msg, extOnly ? 'chrome-extension://' : '')) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          },
+          true
+        );
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TalkLikeUS — American English Voice Transformation Studio</title>
     <meta
