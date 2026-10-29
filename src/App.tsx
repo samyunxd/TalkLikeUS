@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { InfoViews } from './components/InfoViews';
 import { ModeResultCard } from './components/ModeResultCard';
 import { PixelChatModeIcon, PixelFlagStamp } from './components/PixelIcons';
 import { RetroHeader, type ActiveNavSection } from './components/RetroHeader';
 import { TextEditorWindow } from './components/TextEditorWindow';
-import type { MobilePrimaryTab } from './components/mobile/MobileBottomNav';
-import { MobileCommunicatorShell } from './components/mobile/MobileCommunicatorShell';
-import type { MobileDrawerPage } from './components/mobile/MobileTopBar';
 import { MODE_CONFIGS, ORDERED_MODE_CONFIGS } from './config/modes';
 import {
   ClientApiError,
@@ -22,13 +19,6 @@ import {
 import { SAMPLE_PROMPTS, trimToSafeBoundary } from './utils/textStats';
 
 type ResultsMap = Record<VoiceMode, ModeTransformation>;
-
-const EMPTY_EDIT_DRAFTS: Record<VoiceMode, string | null> = {
-  natural_american: null,
-  casual_slang: null,
-  unfiltered_blunt: null,
-  badass_confident: null,
-};
 
 function buildResultsMap(results: ModeTransformation[], chatMode: boolean): ResultsMap {
   const map = {} as ResultsMap;
@@ -49,22 +39,9 @@ function buildResultsMap(results: ModeTransformation[], chatMode: boolean): Resu
   return map;
 }
 
-function detectMobileShellViewport(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(max-width: 767px)').matches;
-}
-
 export default function App() {
-  const [isMobileShell, setIsMobileShell] = useState<boolean>(detectMobileShellViewport);
+  const [activeSection, setActiveSection] = useState<ActiveNavSection>('home');
 
-  // Desktop navigation state
-  const [activeDesktopSection, setActiveDesktopSection] = useState<ActiveNavSection>('home');
-
-  // Dedicated mobile app navigation state
-  const [mobileTab, setMobileTab] = useState<MobilePrimaryTab>('write');
-  const [mobileDrawerPage, setMobileDrawerPage] = useState<MobileDrawerPage>(null);
-
-  // Shared core application state (consistent across mobile & desktop)
   const [inputText, setInputText] = useState<string>('');
   const [submittedSourceText, setSubmittedSourceText] = useState<string>('');
   const [teachMe, setTeachMe] = useState<boolean>(true);
@@ -73,8 +50,6 @@ export default function App() {
 
   const [resultsMap, setResultsMap] = useState<ResultsMap | null>(null);
   const [resultsBatchChatMode, setResultsBatchChatMode] = useState<boolean>(false);
-  const [editingDrafts, setEditingDrafts] =
-    useState<Record<VoiceMode, string | null>>(EMPTY_EDIT_DRAFTS);
   const [pendingReplaceAllAction, setPendingReplaceAllAction] = useState<(() => void) | null>(null);
 
   const [isTransformingAll, setIsTransformingAll] = useState<boolean>(false);
@@ -104,16 +79,6 @@ export default function App() {
   });
   const resultsAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  // Switch cleanly between the dedicated 90s Mobile Communicator Shell (<768px) and Desktop Studio (>=768px)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const handleChange = () => setIsMobileShell(mq.matches);
-    handleChange();
-    mq.addEventListener('change', handleChange);
-    return () => mq.removeEventListener('change', handleChange);
-  }, []);
-
   const announce = useCallback((msg: string) => {
     setLiveAnnouncement('');
     window.setTimeout(() => setLiveAnnouncement(msg), 30);
@@ -123,9 +88,7 @@ export default function App() {
   const isAnyBusy = isTransformingAll || isAnyModeRegenerating;
 
   const hasAnyManualEdits = resultsMap
-    ? VOICE_MODES.some(
-        (m) => Boolean(resultsMap[m].isEdited) || editingDrafts[m] !== null
-      )
+    ? VOICE_MODES.some((m) => Boolean(resultsMap[m].isEdited))
     : false;
 
   const executeTransformAll = useCallback(
@@ -157,20 +120,16 @@ export default function App() {
 
         setSubmittedSourceText(trimmed);
         setResultsMap(buildResultsMap(res.results, chatModeOn));
-        setEditingDrafts(EMPTY_EDIT_DRAFTS);
         setResultsBatchChatMode(chatModeOn);
         announce('All four American voices are ready.');
 
-        // On mobile app shell, navigate straight to YOUR FOUR VOICES results view
-        if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
-          setMobileDrawerPage(null);
-          setMobileTab('results');
-          window.scrollTo({ top: 0, behavior: 'auto' });
-        } else {
-          window.setTimeout(() => {
-            resultsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }, 80);
-        }
+        window.setTimeout(() => {
+          const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+          resultsAnchorRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: isMobile ? 'start' : 'nearest',
+          });
+        }, 80);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
@@ -224,20 +183,6 @@ export default function App() {
     announce('Cleared text editor.');
   };
 
-  const handleClearWorkspace = () => {
-    if (isAnyBusy) return;
-    setInputText('');
-    setSubmittedSourceText('');
-    setResultsMap(null);
-    setEditingDrafts(EMPTY_EDIT_DRAFTS);
-    setErrorBanner(null);
-    setPendingReplaceAllAction(null);
-    setMobileDrawerPage(null);
-    setMobileTab('write');
-    announce('Workspace cleared.');
-  };
-
-  // Desktop live edit handler
   const handleUpdateModeTextLive = useCallback((mode: VoiceMode, nextText: string) => {
     setResultsMap((prev) => {
       if (!prev) return prev;
@@ -255,45 +200,6 @@ export default function App() {
     });
   }, []);
 
-  // Mobile draft-based SAVE CHANGES handlers (persisted across tab navigation)
-  const handleStartMobileEdit = useCallback(
-    (mode: VoiceMode) => {
-      if (!resultsMap) return;
-      setEditingDrafts((prev) => ({
-        ...prev,
-        [mode]: prev[mode] ?? resultsMap[mode].text,
-      }));
-    },
-    [resultsMap]
-  );
-
-  const handleChangeMobileEditDraft = useCallback((mode: VoiceMode, draft: string) => {
-    setEditingDrafts((prev) => ({
-      ...prev,
-      [mode]: draft,
-    }));
-  }, []);
-
-  const handleSaveMobileEdit = useCallback(
-    (mode: VoiceMode) => {
-      const draft = editingDrafts[mode];
-      if (draft === null) return;
-      handleUpdateModeTextLive(mode, draft);
-      setEditingDrafts((prev) => ({
-        ...prev,
-        [mode]: null,
-      }));
-    },
-    [editingDrafts, handleUpdateModeTextLive]
-  );
-
-  const handleCancelMobileEdit = useCallback((mode: VoiceMode) => {
-    setEditingDrafts((prev) => ({
-      ...prev,
-      [mode]: null,
-    }));
-  }, []);
-
   const handleResetModeEdit = useCallback((mode: VoiceMode) => {
     setResultsMap((prev) => {
       if (!prev) return prev;
@@ -309,10 +215,6 @@ export default function App() {
         },
       };
     });
-    setEditingDrafts((prev) => ({
-      ...prev,
-      [mode]: null,
-    }));
   }, []);
 
   const executeSingleRegenerate = useCallback(
@@ -322,7 +224,6 @@ export default function App() {
 
       inFlightModesRef.current[mode] = true;
       setErrorBanner(null);
-      setEditingDrafts((prev) => ({ ...prev, [mode]: null }));
       setRegeneratingModes((prev) => ({ ...prev, [mode]: true }));
       const modeTitle = MODE_CONFIGS[mode].title;
       announce(
@@ -453,7 +354,7 @@ export default function App() {
 
     if (nextVal && resultsMap) {
       const missingNotes = VOICE_MODES.some(
-        (m) => resultsMap[m].explanations.length === 0
+        (m) => resultsMap[m].explanations.length === 0 && !resultsMap[m].toneSummary
       );
       if (missingNotes && !isLoadingNotes) {
         const source = submittedSourceText || inputText.trim();
@@ -477,10 +378,15 @@ export default function App() {
     const sample = SAMPLE_PROMPTS[sampleIndex % SAMPLE_PROMPTS.length];
     setSampleIndex((prev) => prev + 1);
     setInputText(sample.text);
-    setActiveDesktopSection('home');
-    setMobileDrawerPage(null);
-    setMobileTab('write');
+    setActiveSection('home');
     announce(`Loaded sample: ${sample.label}`);
+  };
+
+  const handleSelectSection = (section: ActiveNavSection) => {
+    setActiveSection(section);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleTrimOversizedInput = () => {
@@ -503,71 +409,6 @@ export default function App() {
   const showResultsStatusStrip =
     resultsMap !== null && (anyDisplayedAreChat || chatModeEnabled || hasPendingChatModeDiff);
 
-  // Dedicated 1990s Mobile Communicator Application (<768px)
-  if (isMobileShell) {
-    return (
-      <MobileCommunicatorShell
-        activeTab={mobileTab}
-        onSelectTab={setMobileTab}
-        drawerPage={mobileDrawerPage}
-        onSelectDrawerPage={setMobileDrawerPage}
-        inputText={inputText}
-        onChangeText={setInputText}
-        onClearText={handleClearText}
-        onClearWorkspace={handleClearWorkspace}
-        onLoadQuickSample={handleCycleSample}
-        onLoadSpecificSample={(sample) => setInputText(sample)}
-        teachMe={teachMe}
-        onToggleTeachMe={handleToggleTeachMe}
-        chatModeEnabled={chatModeEnabled}
-        onToggleChatMode={handleToggleChatMode}
-        resultsMap={resultsMap}
-        resultsBatchChatMode={resultsBatchChatMode}
-        hasPendingChatModeDiff={hasPendingChatModeDiff}
-        editingDrafts={editingDrafts}
-        onStartEdit={handleStartMobileEdit}
-        onChangeEditDraft={handleChangeMobileEditDraft}
-        onSaveEdit={handleSaveMobileEdit}
-        onCancelEdit={handleCancelMobileEdit}
-        onResetModeEdit={handleResetModeEdit}
-        isTransformingAll={isTransformingAll}
-        regeneratingModes={regeneratingModes}
-        isAnyBusy={isAnyBusy}
-        isLoadingNotes={isLoadingNotes}
-        onSubmitTransform={handleAmericanizeSubmit}
-        onRegenerateSingle={(mode) => void executeSingleRegenerate(mode)}
-        onRegenerateAll={() =>
-          requestBatchTransformWithEditGuard(
-            inputText.trim() || submittedSourceText,
-            teachMe,
-            chatModeEnabled
-          )
-        }
-        onTrimToLimit={handleTrimOversizedInput}
-        onRequestNotes={() => {
-          if (!resultsMap) return;
-          void fetchNotesForExistingResults(
-            resultsMap,
-            submittedSourceText || inputText.trim(),
-            anyDisplayedAreChat
-          );
-        }}
-        errorBanner={errorBanner}
-        onDismissError={() => setErrorBanner(null)}
-        pendingReplaceAllConfirm={pendingReplaceAllAction !== null}
-        onConfirmReplaceAll={() => {
-          const action = pendingReplaceAllAction;
-          setPendingReplaceAllAction(null);
-          action?.();
-        }}
-        onCancelReplaceAll={() => setPendingReplaceAllAction(null)}
-        liveAnnouncement={liveAnnouncement}
-        onAnnounce={announce}
-      />
-    );
-  }
-
-  // Intact Desktop Studio Experience (>=768px)
   return (
     <div id="studio" className="min-h-screen min-h-dvh flex flex-col">
       {/* Screen-reader live region */}
@@ -577,42 +418,36 @@ export default function App() {
 
       {/* Top Navigation Bar */}
       <RetroHeader
-        activeSection={activeDesktopSection}
-        onSelectSection={(sec) => setActiveDesktopSection(sec)}
+        activeSection={activeSection}
+        onSelectSection={handleSelectSection}
         onCycleSample={handleCycleSample}
       />
 
-      {/* Desktop Content Container */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-6 py-8 space-y-6 min-w-0">
-        {activeDesktopSection !== 'home' ? (
+      {/* Responsive Studio Content Container */}
+      <main className="flex-1 w-full max-w-4xl mx-auto safe-area-x py-3 md:py-8 space-y-3 md:space-y-6 min-w-0">
+        {activeSection !== 'home' ? (
           <InfoViews
-            section={activeDesktopSection}
-            onReturnToStudio={() => setActiveDesktopSection('home')}
+            section={activeSection}
+            onReturnToStudio={() => handleSelectSection('home')}
             onLoadSampleAndReturn={(sample) => {
               setInputText(sample);
-              setActiveDesktopSection('home');
+              handleSelectSection('home');
             }}
           />
         ) : (
           <>
-            {/* Studio Hero Banner */}
-            <section className="text-center space-y-2.5 max-w-2xl mx-auto">
-              <div className="inline-flex items-center justify-center gap-2.5 font-mono text-xs text-[#3E3A30]">
+            {/* Studio Hero Banner — Minimal 1-line prompt on mobile, full editorial header on desktop */}
+            <section className="text-center space-y-1 md:space-y-2.5 max-w-2xl mx-auto">
+              <div className="hidden md:inline-flex items-center justify-center gap-2.5 font-mono text-xs text-[#3E3A30]">
                 <PixelFlagStamp className="w-7 h-4 shrink-0" />
                 <span>TalkLikeUS &middot; American English Voice Lab</span>
               </div>
 
-              <h1
-                style={{ textWrap: 'balance' }}
-                className="font-mono text-4xl font-bold text-[#141B29] tracking-tight leading-tight"
-              >
+              <h1 className="font-mono text-lg min-[375px]:text-xl md:text-4xl font-bold text-[#141B29] tracking-tight leading-tight text-balance">
                 Say it like you mean it.
               </h1>
 
-              <p
-                style={{ textWrap: 'balance' }}
-                className="text-base text-[#2C3342] leading-relaxed"
-              >
+              <p className="hidden md:block text-base text-[#2C3342] leading-relaxed text-balance">
                 Drop your text. Get four American voices. Keep the one that sounds like you.
               </p>
             </section>
@@ -621,7 +456,7 @@ export default function App() {
             {errorBanner && (
               <div
                 role="alert"
-                className="retro-window !bg-[#FDF0ED] !border-[#B41616] p-4 flex items-center justify-between gap-4"
+                className="retro-window !bg-[#FDF0ED] !border-[#B41616] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
               >
                 <div className="space-y-1 min-w-0">
                   <p className="font-mono text-xs font-bold text-[#8F1111]">
@@ -653,7 +488,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Main Desktop Studio Text Editor */}
+            {/* Main Studio Text Editor */}
             <TextEditorWindow
               inputText={inputText}
               onChangeText={setInputText}
@@ -683,7 +518,7 @@ export default function App() {
                 className="retro-window divide-y-2 divide-[#141B29] min-w-0"
               >
                 {showResultsStatusStrip && (
-                  <div className="px-5 py-2.5 bg-[#E6E2D2] flex items-center justify-between gap-2 font-mono text-xs min-w-0">
+                  <div className="hidden md:flex px-5 py-2.5 bg-[#E6E2D2] items-center justify-between gap-3 font-mono text-xs min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-[#141B29] min-w-0">
                       <PixelChatModeIcon className="w-4 h-4 shrink-0" />
                       {allDisplayedAreChat ? (
@@ -704,8 +539,7 @@ export default function App() {
                             &middot;
                           </span>
                           <span className="text-[#2C3342]">
-                            <strong>CHAT MODE: {chatModeEnabled ? 'ON' : 'OFF'}</strong> will apply
-                            to your next generation
+                            <strong>CHAT MODE: {chatModeEnabled ? 'ON' : 'OFF'}</strong> applies next
                           </span>
                         </>
                       )}
@@ -759,17 +593,17 @@ export default function App() {
       </main>
 
       {/* Quiet Authentic 1990s Footer */}
-      <footer className="w-full border-t-2 border-[#141B29] bg-[#E5E0D0] mt-10">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-3 font-mono text-xs text-[#3E3A30]">
-          <span>
+      <footer className="w-full border-t-2 border-[#141B29] bg-[#E5E0D0] mt-5 md:mt-10">
+        <div className="max-w-4xl mx-auto safe-area-x py-1.5 md:py-3 flex items-center justify-center md:justify-between gap-3 font-mono text-[11px] md:text-xs text-[#3E3A30]">
+          <span className="hidden md:inline">
             <strong className="text-[#141B29]">TalkLikeUS</strong> &middot; Same idea. Four American voices.
           </span>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-0">
             <a
               href="#how"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveDesktopSection('how');
+                handleSelectSection('how');
               }}
               className="retro-link min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0"
             >
@@ -779,7 +613,7 @@ export default function App() {
               href="#voices"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveDesktopSection('voices');
+                handleSelectSection('voices');
               }}
               className="retro-link min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0"
             >
@@ -789,11 +623,12 @@ export default function App() {
               href="#about"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveDesktopSection('about');
+                handleSelectSection('about');
               }}
               className="retro-link min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0"
             >
-              Privacy &amp; About
+              <span className="md:hidden">About</span>
+              <span className="hidden md:inline">Privacy &amp; About</span>
             </a>
           </div>
         </div>

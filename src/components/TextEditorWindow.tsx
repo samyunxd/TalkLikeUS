@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { MAX_INPUT_CHARS } from '../config/modes';
 import { SAMPLE_PROMPTS, getTextMetrics } from '../utils/textStats';
-import { PixelBookIcon, PixelChatModeIcon } from './PixelIcons';
+import { PixelBookIcon, PixelChatModeIcon, PixelSpinnerIcon } from './PixelIcons';
 
 interface TextEditorWindowProps {
   inputText: string;
@@ -18,16 +18,6 @@ interface TextEditorWindowProps {
   pendingReplaceAllConfirm: boolean;
   onConfirmReplaceAll: () => void;
   onCancelReplaceAll: () => void;
-}
-
-function estimateCountdownSeconds(charCount: number, teachMe: boolean): number {
-  let base = 10;
-  if (charCount > 4000) {
-    base = 24;
-  } else if (charCount > 900) {
-    base = 15;
-  }
-  return teachMe ? base + 2 : base;
 }
 
 export function TextEditorWindow({
@@ -52,7 +42,6 @@ export function TextEditorWindow({
   const canClear = inputText.length > 0 && !isAnyBusy;
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [countdown, setCountdown] = useState<number>(12);
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -85,38 +74,25 @@ export function TextEditorWindow({
     };
   }, [adjustTextareaHeight]);
 
-  useEffect(() => {
-    if (!isTransformingAll) return;
-
-    const initial = estimateCountdownSeconds(inputText.length, teachMe);
-    setCountdown(initial);
-
-    const timer = window.setInterval(() => {
-      setCountdown((prev) => (prev > 1 ? prev - 1 : 1));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [isTransformingAll, inputText.length, teachMe]);
-
   return (
     <section aria-labelledby="original-text-label" className="retro-window min-w-0">
-      {/* Compact Title Bar — Houses minimal count + mobile Clear button with 0 layout jump */}
+      {/* Compact Title Bar — Minimal on mobile, detailed on desktop */}
       <div className="bg-[#142850] text-[#F7F5EC] min-h-[44px] px-3 sm:px-4 flex items-center justify-between gap-2 border-b-2 border-[#141B29]">
         <label
           id="original-text-label"
           htmlFor="studio-original-textarea"
           className="font-pixel text-[11px] sm:text-sm tracking-wide cursor-pointer whitespace-nowrap shrink-0"
         >
-          <span className="sm:hidden">ORIGINAL TEXT</span>
-          <span className="hidden sm:inline">YOUR ORIGINAL TEXT</span>
+          <span className="md:hidden">YOUR TEXT</span>
+          <span className="hidden md:inline">YOUR ORIGINAL TEXT</span>
         </label>
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="font-mono text-[11px] sm:text-xs text-[#DCE4F5] tabular-nums whitespace-nowrap">
-            <span className="sm:hidden">
-              {metrics.words > 0 ? `${metrics.words.toLocaleString()}w` : '0w'}
-            </span>
-            <span className="hidden sm:inline">
+            {metrics.words > 0 && (
+              <span className="md:hidden">{metrics.words.toLocaleString()}w</span>
+            )}
+            <span className="hidden md:inline">
               {metrics.words.toLocaleString()} words &middot; {metrics.chars.toLocaleString()} /{' '}
               {MAX_INPUT_CHARS.toLocaleString()} chars
             </span>
@@ -137,8 +113,8 @@ export function TextEditorWindow({
       </div>
 
       <div className="p-2.5 min-[375px]:p-3 sm:p-5 space-y-2.5 sm:space-y-3.5 min-w-0">
-        {/* Sample quick-fill bar: Desktop/Tablet only (mobile uses the clean "Sample" button in header) */}
-        <div className="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-0 font-mono text-xs text-[#433E32] -my-1.5">
+        {/* Sample quick-fill bar: Desktop only (mobile uses the clean "Sample" button in header) */}
+        <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-0 font-mono text-xs text-[#433E32] -my-1.5">
           <span className="font-semibold text-[#141B29] whitespace-nowrap shrink-0">
             Samples:
           </span>
@@ -181,8 +157,8 @@ export function TextEditorWindow({
             autoCapitalize="sentences"
             autoCorrect="on"
             spellCheck={true}
-            placeholder="Paste or type your message..."
-            className="w-full min-h-[104px] sm:min-h-[150px] p-2.5 sm:p-3.5 bg-transparent text-[#141B29] placeholder:text-[#767060] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-none sm:resize-y focus:outline-none block"
+            placeholder="Type or paste text..."
+            className="w-full min-h-[104px] sm:min-h-[150px] p-2.5 sm:p-3.5 bg-transparent text-[#141B29] placeholder:text-[#767060] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-none md:resize-y focus:outline-none block"
           />
         </div>
 
@@ -209,7 +185,10 @@ export function TextEditorWindow({
         {/* Long multi-chunk notice (concise) */}
         {metrics.isLongChunked && !metrics.isOverLimit && (
           <p className="font-mono text-[11px] sm:text-xs text-[#142850] bg-[#E5EAF5] border border-[#142850] px-2.5 py-1.5 break-words">
-            Long-form ({metrics.words.toLocaleString()}w): splits cleanly by paragraph without summarizing.
+            <span className="md:hidden">Long text ({metrics.words.toLocaleString()}w)</span>
+            <span className="hidden md:inline">
+              Long-form ({metrics.words.toLocaleString()}w): splits cleanly by paragraph without summarizing.
+            </span>
           </p>
         )}
 
@@ -299,28 +278,34 @@ export function TextEditorWindow({
             Clear Text
           </button>
 
-          {/* 4. Primary Action Button */}
+          {/* 4. Primary Action Button with Retro Loading Animation */}
           <button
             type="button"
             onClick={onSubmitTransform}
             disabled={!canSubmit}
-            className="retro-btn-primary col-span-2 md:ml-auto min-h-[46px] md:min-h-[44px] md:h-11 w-full md:w-auto px-3.5 lg:px-5 inline-flex items-center justify-center text-xs lg:text-sm leading-none font-bold tracking-wide tabular-nums whitespace-nowrap shrink-0"
+            aria-busy={isTransformingAll}
+            className={`retro-btn-primary ${
+              isTransformingAll ? 'retro-btn-loading' : ''
+            } col-span-2 md:ml-auto min-h-[46px] md:min-h-[44px] md:h-11 w-full md:w-auto px-3.5 lg:px-5 inline-flex items-center justify-center gap-2.5 text-xs lg:text-sm leading-none font-bold tracking-wide whitespace-nowrap shrink-0`}
           >
-            {isTransformingAll
-              ? `AMERICANIZE IT! (${String(countdown).padStart(2, '0')}s)`
-              : 'AMERICANIZE IT!'}
+            {isTransformingAll ? (
+              <>
+                <PixelSpinnerIcon className="w-4 h-4 shrink-0" />
+                <span>AMERICANIZING</span>
+                <span className="inline-flex items-center gap-1" aria-hidden="true">
+                  <span className="w-1.5 h-2.5 bg-[#FDE047] retro-loader-block-1" />
+                  <span className="w-1.5 h-2.5 bg-[#FFFFFF] retro-loader-block-2" />
+                  <span className="w-1.5 h-2.5 bg-[#FDE047] retro-loader-block-3" />
+                </span>
+              </>
+            ) : (
+              <span>AMERICANIZE IT!</span>
+            )}
           </button>
         </div>
 
-        {/* Thin Retro Progress Bar During Generation (no wordy caption on mobile) */}
-        {isTransformingAll && (
-          <div role="status" aria-live="polite" className="h-2 w-full border border-[#141B29] bg-[#DFDAC8] overflow-hidden">
-            <div className="h-full w-full retro-progress-bar" />
-          </div>
-        )}
-
         {/* Helper & Live Counter Footer — Desktop only so mobile stays crisp & uncluttered */}
-        <div className="hidden sm:flex flex-wrap items-center justify-between gap-2 text-xs text-[#4B4639]">
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-2 text-xs text-[#4B4639]">
           <p className="leading-relaxed">
             {chatModeEnabled
               ? 'Chat Mode ON: compresses your message into short, real American texts.'

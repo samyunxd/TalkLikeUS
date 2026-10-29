@@ -40,17 +40,28 @@ export function TeachMePanel({
   isLoadingNotes,
   onRequestNotes,
 }: TeachMePanelProps) {
-  const hasContent =
+  const hasDesktopContent =
     explanations.length > 0 || Boolean(toneSummary) || Boolean(reusablePattern);
+  const hasMobileContent = explanations.length > 0 || Boolean(toneSummary);
 
   return (
-    <div className="bg-[#ECE8D9] border border-[#8E8772] px-2.5 sm:px-3.5 py-2 sm:py-2.5 space-y-1.5 sm:space-y-2 text-xs min-w-0">
+    <div
+      className={`${
+        !isLoadingNotes && !hasMobileContent ? 'hidden md:block ' : ''
+      }bg-[#ECE8D9] border border-[#8E8772] px-2.5 md:px-3.5 py-2 md:py-2.5 space-y-1.5 md:space-y-2 text-xs min-w-0`}
+    >
       {isLoadingNotes ? (
-        <p className="font-mono text-xs text-[#142850]">
-          Loading {modeTitle} notes...
-        </p>
-      ) : !hasContent ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2 font-mono text-[11px] md:text-xs text-[#142850]">
+          <span className="inline-flex items-center gap-0.5" aria-hidden="true">
+            <span className="w-1 h-2.5 bg-[#142850] retro-loader-block-1" />
+            <span className="w-1 h-2.5 bg-[#D92323] retro-loader-block-2" />
+            <span className="w-1 h-2.5 bg-[#142850] retro-loader-block-3" />
+          </span>
+          <span className="md:hidden">Loading notes</span>
+          <span className="hidden md:inline">Loading {modeTitle} notes</span>
+        </div>
+      ) : !hasDesktopContent ? (
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-[#3E3A30]">No notes loaded yet.</p>
           {onRequestNotes && (
             <button
@@ -65,8 +76,12 @@ export function TeachMePanel({
       ) : (
         <>
           {toneSummary && (
-            <p className="hidden sm:block text-xs text-[#1E2533] leading-relaxed break-words [overflow-wrap:anywhere]">
-              <strong className="font-mono text-[#142850]">Context: </strong>
+            <p
+              className={`${
+                explanations.length > 0 ? 'hidden md:block ' : ''
+              }text-xs text-[#1E2533] leading-relaxed break-words [overflow-wrap:anywhere]`}
+            >
+              <strong className="hidden md:inline font-mono text-[#142850]">Context: </strong>
               {toneSummary}
             </p>
           )}
@@ -80,7 +95,7 @@ export function TeachMePanel({
                     key={`${item.replacement}-${idx}`}
                     className={`${idx > 0 ? 'pt-1.5' : ''} min-w-0`}
                   >
-                    <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-[11px] sm:text-xs break-words [overflow-wrap:anywhere]">
+                    <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-[11px] md:text-xs break-words [overflow-wrap:anywhere]">
                       <span className="line-through text-[#666052]">
                         &ldquo;{item.original}&rdquo;
                       </span>
@@ -90,14 +105,14 @@ export function TeachMePanel({
                       <span className="font-semibold text-[#141B29]">
                         &ldquo;{item.replacement}&rdquo;
                       </span>
-                      <span aria-hidden="true" className="text-[#8E8772]">
+                      <span aria-hidden="true" className="hidden md:inline text-[#8E8772]">
                         &middot;
                       </span>
-                      <span className={`font-semibold ${regInfo.textClass}`}>
+                      <span className={`hidden md:inline font-semibold ${regInfo.textClass}`}>
                         {regInfo.label}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-xs text-[#232B3A] leading-snug sm:leading-relaxed break-words [overflow-wrap:anywhere]">
+                    <p className="mt-0.5 text-xs text-[#232B3A] leading-snug md:leading-relaxed break-words [overflow-wrap:anywhere]">
                       {item.reason}
                     </p>
                   </li>
@@ -107,7 +122,7 @@ export function TeachMePanel({
           )}
 
           {reusablePattern && (
-            <div className="hidden sm:block pt-1.5 border-t border-dashed border-[#C4BDA9] text-xs text-[#142850] break-words [overflow-wrap:anywhere]">
+            <div className="hidden md:block pt-1.5 border-t border-dashed border-[#C4BDA9] text-xs text-[#142850] break-words [overflow-wrap:anywhere]">
               <strong className="font-mono">Pattern: </strong>
               <span>{reusablePattern}</span>
             </div>

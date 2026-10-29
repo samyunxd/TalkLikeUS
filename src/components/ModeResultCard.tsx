@@ -35,10 +35,8 @@ export function ModeResultCard({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [confirmingReplace, setConfirmingReplace] = useState<boolean>(false);
-  // Collapsed by default on mobile (<640px) for a compact, uncluttered screen; expanded on desktop
-  const [notesOpen, setNotesOpen] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 640 : false
-  );
+  // Desktop toggle state; on mobile (<768px) Teach Me notes always show automatically when teachMe is ON
+  const [notesOpen, setNotesOpen] = useState<boolean>(true);
 
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fallbackSelectRef = useRef<HTMLDivElement | null>(null);
@@ -46,9 +44,8 @@ export function ModeResultCard({
   const syncEditHeight = useCallback(() => {
     const el = editTextareaRef.current;
     if (!el || typeof window === 'undefined') return;
-    const maxH = window.innerWidth < 640 ? 240 : 340;
     el.style.height = 'auto';
-    const nextH = Math.min(Math.max(el.scrollHeight, 100), maxH);
+    const nextH = Math.min(Math.max(el.scrollHeight, 100), 340);
     el.style.height = `${nextH}px`;
     el.style.overflowY = el.scrollHeight > nextH ? 'auto' : 'hidden';
   }, []);
@@ -66,13 +63,28 @@ export function ModeResultCard({
     }
   }, [isRegenerating]);
 
+  // Ensure mobile view never stays trapped in desktop inline-edit state when resizing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handleViewport = () => {
+      if (mq.matches) {
+        setIsEditing(false);
+        setConfirmingReplace(false);
+      }
+    };
+    handleViewport();
+    mq.addEventListener('change', handleViewport);
+    return () => mq.removeEventListener('change', handleViewport);
+  }, []);
+
   const handleCopy = async () => {
     if (isRegenerating || !data.text.trim()) return;
     const res = await copyTextToClipboard(data.text);
     if (res.ok) {
       setCopyStatus('copied');
       onAnnounce(`Copied ${config.title} text to clipboard.`);
-      window.setTimeout(() => setCopyStatus('idle'), 1800);
+      window.setTimeout(() => setCopyStatus('idle'), 1600);
     } else {
       setCopyStatus('failed');
       if (fallbackSelectRef.current && typeof window !== 'undefined') {
@@ -86,8 +98,8 @@ export function ModeResultCard({
           // Ignore selection errors
         }
       }
-      onAnnounce(`Automatic clipboard blocked. Text selected—tap Copy on your screen.`);
-      window.setTimeout(() => setCopyStatus('idle'), 4000);
+      onAnnounce('Automatic clipboard blocked. Text selected—tap Copy on your screen.');
+      window.setTimeout(() => setCopyStatus('idle'), 3500);
     }
   };
 
@@ -129,7 +141,7 @@ export function ModeResultCard({
   return (
     <article
       aria-labelledby={`mode-heading-${config.id}`}
-      className="px-2.5 min-[375px]:px-3.5 py-2.5 sm:px-5 sm:py-4 bg-[#F4F1E6] space-y-2 min-w-0"
+      className="px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0"
     >
       {/* Clean Single-Line Card Title */}
       <div className="flex items-center justify-between gap-2 min-w-0">
@@ -141,17 +153,17 @@ export function ModeResultCard({
           </span>
           <h3
             id={`mode-heading-${config.id}`}
-            className="font-mono text-xs min-[375px]:text-sm sm:text-base font-bold text-[#141B29] truncate"
+            className="font-mono text-xs min-[375px]:text-sm md:text-base font-bold text-[#141B29] truncate"
           >
             {config.number}. {config.title}
           </h3>
           {data.chatMode && (
-            <span className="font-mono text-[11px] sm:text-xs font-semibold text-[#15603A] whitespace-nowrap shrink-0">
+            <span className="hidden md:inline font-mono text-xs font-semibold text-[#15603A] whitespace-nowrap shrink-0">
               &middot; Chat
             </span>
           )}
           {data.isEdited && (
-            <span className="font-mono text-[11px] sm:text-xs font-semibold text-[#6B3A00] whitespace-nowrap shrink-0">
+            <span className="hidden md:inline font-mono text-xs font-semibold text-[#6B3A00] whitespace-nowrap shrink-0">
               &middot; Edited
             </span>
           )}
@@ -183,9 +195,9 @@ export function ModeResultCard({
         )}
       </div>
 
-      {/* Output Area: Editable Mobile Textarea OR Crisp White Text Well */}
+      {/* Output Area: Desktop Inline Editor OR Crisp White Text Well */}
       {isEditing ? (
-        <div className="space-y-2 min-w-0">
+        <div className="hidden md:block space-y-2 min-w-0">
           <div className="retro-well !border-[#142850] min-w-0">
             <label htmlFor={`edit-textarea-${config.id}`} className="sr-only">
               Edit {config.title} result
@@ -200,7 +212,7 @@ export function ModeResultCard({
               autoCapitalize="sentences"
               autoCorrect="on"
               spellCheck={true}
-              className="w-full min-h-[100px] p-2.5 sm:p-3.5 bg-[#FFFEF9] text-[#141B29] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-y focus:outline-none block"
+              className="w-full min-h-[100px] p-3.5 bg-[#FFFEF9] text-[#141B29] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-y focus:outline-none block"
             />
           </div>
 
@@ -234,7 +246,7 @@ export function ModeResultCard({
               void handleCopy();
             }
           }}
-          className={`retro-well w-full text-left px-3 sm:px-3.5 py-2.5 sm:py-3 transition-colors min-w-0 ${
+          className={`retro-well w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 transition-colors min-w-0 ${
             copyStatus === 'copied'
               ? '!bg-[#E6F7EC] !border-[#15603A] cursor-pointer'
               : copyStatus === 'failed'
@@ -242,23 +254,23 @@ export function ModeResultCard({
                 : 'hover:bg-[#FAF8F1] active:bg-[#EFECE0] cursor-pointer'
           }`}
         >
-          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] sm:text-base leading-relaxed text-[#141B29]">
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
             {data.text}
           </p>
         </div>
       )}
 
-      {/* Inline Confirmation Before Overwriting Manually Edited Card */}
+      {/* Desktop Inline Confirmation Before Overwriting Manually Edited Card */}
       {confirmingReplace && (
         <div
           role="region"
           aria-label={`Confirm replacing manual edits in ${config.title}`}
-          className="bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+          className="hidden md:flex bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 items-center justify-between gap-2"
         >
           <p className="text-xs text-[#3D2200] font-mono font-semibold">
             Replace your manual edit?
           </p>
-          <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleConfirmRegenerate}
@@ -277,20 +289,16 @@ export function ModeResultCard({
         </div>
       )}
 
-      {/* Single Unified Compact Action Row: Copy + Edit + Regen + Optional Notes Toggle (cuts mobile card height in half!) */}
+      {/* Desktop-Only Action Row (Copy, Edit, Regenerate, Notes removed on mobile per user preference) */}
       {!isEditing && (
-        <div
-          className={`grid ${
-            teachMe ? 'grid-cols-4' : 'grid-cols-3'
-          } sm:flex sm:items-center sm:justify-between gap-1.5 sm:gap-2 min-w-0`}
-        >
-          <div className="contents sm:flex sm:items-center sm:gap-2">
+        <div className="hidden md:flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCopy}
               disabled={isRegenerating || !data.text.trim()}
               aria-label={`Copy ${config.title}`}
-              className={`retro-btn min-h-[44px] min-w-[44px] px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap ${
+              className={`retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap ${
                 copyStatus === 'copied'
                   ? '!bg-[#D6F5DF] !border-[#15603A] !text-[#0F4224] font-bold'
                   : ''
@@ -304,7 +312,7 @@ export function ModeResultCard({
               onClick={handleToggleEdit}
               disabled={isDisabledActions}
               aria-label={`Edit ${config.title}`}
-              className="retro-btn min-h-[44px] min-w-[44px] px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
+              className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
             >
               Edit
             </button>
@@ -314,12 +322,9 @@ export function ModeResultCard({
               onClick={handleRegenerateClick}
               disabled={isDisabledActions}
               aria-label={`Regenerate ${config.title}`}
-              className="retro-btn min-h-[44px] min-w-[44px] px-1 sm:px-3.5 text-[11px] sm:text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
+              className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
             >
-              <span className="sm:hidden">{isRegenerating ? '...' : 'Regen'}</span>
-              <span className="hidden sm:inline">
-                {isRegenerating ? 'Rewriting' : 'Regenerate'}
-              </span>
+              {isRegenerating ? 'Rewriting' : 'Regenerate'}
             </button>
           </div>
 
@@ -329,17 +334,12 @@ export function ModeResultCard({
               onClick={() => setNotesOpen((prev) => !prev)}
               aria-expanded={notesOpen}
               aria-label={`${notesOpen ? 'Hide' : 'Show'} Teach Me Notes for ${config.title}`}
-              className={`retro-btn sm:bg-transparent sm:border-0 sm:shadow-none min-h-[44px] min-w-[44px] px-1 sm:px-2 text-[11px] sm:text-xs font-mono font-semibold inline-flex items-center justify-center gap-1 whitespace-nowrap ${
-                notesOpen
-                  ? '!bg-[#DCE6FA] !border-[#142850] sm:!bg-transparent sm:text-[#551A8B] sm:underline'
-                  : 'sm:text-[#0000EE] sm:underline'
+              className={`bg-transparent border-0 shadow-none min-h-[44px] px-2 text-xs font-mono font-semibold inline-flex items-center justify-center gap-1 whitespace-nowrap underline underline-offset-3 cursor-pointer ${
+                notesOpen ? 'text-[#551A8B]' : 'text-[#0000EE]'
               }`}
             >
-              <PixelBookIcon className="hidden sm:block w-3.5 h-3.5 shrink-0" />
-              <span className="sm:hidden">
-                {notesOpen ? 'Hide' : `Notes${data.explanations.length ? ` (${data.explanations.length})` : ''}`}
-              </span>
-              <span className="hidden sm:inline">
+              <PixelBookIcon className="w-3.5 h-3.5 shrink-0" />
+              <span>
                 {notesOpen
                   ? '[-] Hide Teach Me Notes'
                   : `[+] Teach Me Notes (${data.explanations.length})`}
@@ -349,15 +349,18 @@ export function ModeResultCard({
         </div>
       )}
 
-      {teachMe && notesOpen && (
-        <TeachMePanel
-          modeTitle={config.title}
-          explanations={data.explanations}
-          toneSummary={data.toneSummary}
-          reusablePattern={data.reusablePattern}
-          isLoadingNotes={isLoadingNotes}
-          onRequestNotes={onRequestNotes}
-        />
+      {/* Teach Me Notes: Always shown automatically on mobile when Teach Me is ON */}
+      {teachMe && (
+        <div className={notesOpen ? 'block' : 'block md:hidden'}>
+          <TeachMePanel
+            modeTitle={config.title}
+            explanations={data.explanations}
+            toneSummary={data.toneSummary}
+            reusablePattern={data.reusablePattern}
+            isLoadingNotes={isLoadingNotes}
+            onRequestNotes={onRequestNotes}
+          />
+        </div>
       )}
     </article>
   );

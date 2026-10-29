@@ -47,14 +47,14 @@
 
 /* Safe-area horizontal padding for notched phones in portrait & landscape */
 .safe-area-x {
-  padding-left: max(0.625rem, env(safe-area-inset-left));
-  padding-right: max(0.625rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 
 @media (min-width: 375px) {
   .safe-area-x {
-    padding-left: max(0.875rem, env(safe-area-inset-left));
-    padding-right: max(0.875rem, env(safe-area-inset-right));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
 
@@ -165,6 +165,79 @@
   cursor: not-allowed;
 }
 
+.retro-btn-primary.retro-btn-loading:disabled {
+  opacity: 1;
+  background-color: #c21b1b;
+  cursor: wait;
+}
+
+/* Custom 1990s Retro Scrollbar ("Slider") — Mobile & Desktop */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+textarea::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+@media (min-width: 768px) {
+  textarea::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background-color: #dfdac8;
+  background-image: radial-gradient(#c6bfaa 1px, transparent 1px);
+  background-size: 4px 4px;
+  border-left: 1px solid #141b29;
+  border-right: 1px solid #141b29;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #142850;
+  border: 1px solid #141b29;
+  box-shadow:
+    inset 1px 1px 0 #4a6fa5,
+    inset -1px -1px 0 #0a152b;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #1f3f7a;
+  box-shadow:
+    inset 1px 1px 0 #6d92c9,
+    inset -1px -1px 0 #0f1f3d;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #d92323;
+  box-shadow:
+    inset 1px 1px 0 #ff7575,
+    inset -1px -1px 0 #8f1111;
+}
+
+::-webkit-scrollbar-corner {
+  background-color: #dfdac8;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  html,
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: #142850 #dfdac8;
+  }
+}
+
 /* Classic Internet Hyperlink */
 .retro-link {
   color: #0000ee;
@@ -190,24 +263,43 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Retro Progress Striped Bar */
-@keyframes retro-stripes {
-  0% {
-    background-position: 0 0;
+/* Compositor-only Pixel Loading Animations */
+@keyframes retro-pixel-spin {
+  from {
+    transform: rotate(0deg);
   }
-  100% {
-    background-position: 32px 0;
+  to {
+    transform: rotate(360deg);
   }
 }
 
-.retro-progress-bar {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    #142850,
-    #142850 8px,
-    #254b96 8px,
-    #254b96 16px
-  );
-  background-size: 32px 32px;
-  animation: retro-stripes 0.75s linear infinite;
+@keyframes retro-block-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1.25);
+    opacity: 1;
+  }
+}
+
+.retro-spin-steps {
+  animation: retro-pixel-spin 0.72s steps(8, end) infinite;
+}
+
+.retro-loader-block-1 {
+  animation: retro-block-pulse 0.75s ease-in-out infinite;
+  animation-delay: 0ms;
+}
+
+.retro-loader-block-2 {
+  animation: retro-block-pulse 0.75s ease-in-out infinite;
+  animation-delay: 150ms;
+}
+
+.retro-loader-block-3 {
+  animation: retro-block-pulse 0.75s ease-in-out infinite;
+  animation-delay: 300ms;
 }

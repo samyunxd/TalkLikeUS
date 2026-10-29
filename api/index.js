@@ -1333,4 +1333,3 @@ export const config = {
 };
 const app = createApiApp({ normalizeServerlessPaths: true });
 export default app;
-
