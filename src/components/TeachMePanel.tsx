@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ExplanationNote, RegisterLevel } from '../types/transform';
 
 interface TeachMePanelProps {
@@ -32,7 +33,7 @@ const REGISTER_LABELS: Record<RegisterLevel, { label: string; textClass: string 
   },
 };
 
-export function TeachMePanel({
+export const TeachMePanel = memo(function TeachMePanel({
   modeTitle,
   explanations,
   toneSummary,
@@ -42,14 +43,9 @@ export function TeachMePanel({
 }: TeachMePanelProps) {
   const hasDesktopContent =
     explanations.length > 0 || Boolean(toneSummary) || Boolean(reusablePattern);
-  const hasMobileContent = explanations.length > 0 || Boolean(toneSummary);
 
   return (
-    <div
-      className={`${
-        !isLoadingNotes && !hasMobileContent ? 'hidden md:block ' : ''
-      }bg-[#ECE8D9] border border-[#8E8772] px-2.5 md:px-3.5 py-2 md:py-2.5 space-y-1.5 md:space-y-2 text-xs min-w-0`}
-    >
+    <div className="bg-[#ECE8D9] border border-[#8E8772] px-2.5 md:px-3.5 py-2 md:py-2.5 space-y-1.5 md:space-y-2 text-xs min-w-0">
       {isLoadingNotes ? (
         <div className="inline-flex items-center gap-2 font-mono text-[11px] md:text-xs text-[#142850]">
           <span className="inline-flex items-center gap-0.5" aria-hidden="true">
@@ -131,4 +127,4 @@ export function TeachMePanel({
       )}
     </div>
   );
-}
+});

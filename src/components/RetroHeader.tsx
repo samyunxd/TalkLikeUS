@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { PixelFlagStamp } from './PixelIcons';
 
 export type ActiveNavSection = 'home' | 'how' | 'voices' | 'about';
@@ -8,18 +9,18 @@ interface RetroHeaderProps {
   onCycleSample: () => void;
 }
 
-export function RetroHeader({
+const NAV_ITEMS: Array<{ id: ActiveNavSection; label: string }> = [
+  { id: 'home', label: 'Home' },
+  { id: 'how', label: 'How It Works' },
+  { id: 'voices', label: 'Voice Guide' },
+  { id: 'about', label: 'About' },
+];
+
+export const RetroHeader = memo(function RetroHeader({
   activeSection,
   onSelectSection,
   onCycleSample,
 }: RetroHeaderProps) {
-  const navItems: Array<{ id: ActiveNavSection; label: string }> = [
-    { id: 'home', label: 'Home' },
-    { id: 'how', label: 'How It Works' },
-    { id: 'voices', label: 'Voice Guide' },
-    { id: 'about', label: 'About' },
-  ];
-
   return (
     <header className="w-full bg-[#F4F1E6] border-b-2 border-[#141B29]">
       <div className="max-w-4xl mx-auto safe-area-x py-1.5 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-8">
@@ -30,15 +31,15 @@ export function RetroHeader({
             e.preventDefault();
             onSelectSection('home');
           }}
-          className="min-h-[44px] inline-flex items-center gap-2 sm:gap-2.5 font-mono text-lg sm:text-2xl font-bold tracking-tight text-[#142850] hover:text-[#0000EE] whitespace-nowrap shrink-0"
+          className="group min-h-[44px] inline-flex items-center gap-2 sm:gap-2.5 font-mono text-lg sm:text-2xl font-bold tracking-tight text-[#142850] hover:text-[#0000EE] transition-colors duration-150 whitespace-nowrap shrink-0"
         >
-          <PixelFlagStamp className="w-6 h-4 sm:w-7 sm:h-5 shrink-0" />
+          <PixelFlagStamp className="w-6 h-4 sm:w-7 sm:h-5 shrink-0 transition-transform duration-150 group-hover:-translate-y-0.5" />
           <span>TalkLikeUS</span>
         </a>
 
         {/* Zone 2: Clean single-line hypertext navigation links (Desktop only — keeps mobile top bar ultra-clean) */}
         <nav aria-label="Main navigation" className="hidden md:flex items-center gap-6 font-mono text-sm">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const isActive = activeSection === item.id;
             return (
               <a
@@ -84,4 +85,4 @@ export function RetroHeader({
       </div>
     </header>
   );
-}
+});

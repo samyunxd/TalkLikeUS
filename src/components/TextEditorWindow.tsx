@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MAX_INPUT_CHARS } from '../config/modes';
 import { SAMPLE_PROMPTS, getTextMetrics } from '../utils/textStats';
 import { PixelBookIcon, PixelChatModeIcon, PixelSpinnerIcon } from './PixelIcons';
 
 interface TextEditorWindowProps {
   inputText: string;
+  sampleFlashTrigger: number;
   onChangeText: (next: string) => void;
+  onLoadSampleText: (sampleText: string) => void;
   onClearText: () => void;
   teachMe: boolean;
   onToggleTeachMe: () => void;
@@ -20,9 +22,11 @@ interface TextEditorWindowProps {
   onCancelReplaceAll: () => void;
 }
 
-export function TextEditorWindow({
+export const TextEditorWindow = memo(function TextEditorWindow({
   inputText,
+  sampleFlashTrigger,
   onChangeText,
+  onLoadSampleText,
   onClearText,
   teachMe,
   onToggleTeachMe,
@@ -36,14 +40,25 @@ export function TextEditorWindow({
   onConfirmReplaceAll,
   onCancelReplaceAll,
 }: TextEditorWindowProps) {
-  const metrics = getTextMetrics(inputText);
+  const metrics = useMemo(() => getTextMetrics(inputText), [inputText]);
   const canSubmit =
     inputText.trim().length > 0 && !metrics.isOverLimit && !isAnyBusy;
   const canClear = inputText.length > 0 && !isAnyBusy;
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const prevLenRef = useRef<number>(inputText.length);
+  const lastHeightRef = useRef<number>(0);
 
-  const adjustTextareaHeight = useCallback(() => {
+  const [isSampleFlashing, setIsSampleFlashing] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (sampleFlashTrigger === 0) return;
+    setIsSampleFlashing(true);
+    const timer = window.setTimeout(() => setIsSampleFlashing(false), 240);
+    return () => window.clearTimeout(timer);
+  }, [sampleFlashTrigger]);
+
+  const adjustTextareaHeight = useCallback((forceRecalc = false) => {
     const el = textareaRef.current;
     if (!el || typeof window === 'undefined') return;
 
@@ -53,22 +68,44 @@ export function TextEditorWindow({
       ? Math.min(240, Math.max(120, Math.round(window.innerHeight * 0.38)))
       : 360;
 
-    el.style.height = 'auto';
-    const nextHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
-    el.style.height = `${nextHeight}px`;
-    el.style.overflowY = el.scrollHeight > nextHeight ? 'auto' : 'hidden';
+    const currentLen = el.value.length;
+    const mayHaveShrunk =
+      forceRecalc || currentLen < prevLenRef.current || currentLen === 0;
+    prevLenRef.current = currentLen;
+
+    if (mayHaveShrunk) {
+      el.style.height = 'auto';
+    }
+
+    const rawScrollHeight = el.scrollHeight;
+    const nextHeight = Math.min(Math.max(rawScrollHeight, minHeight), maxHeight);
+
+    if (lastHeightRef.current !== nextHeight || mayHaveShrunk) {
+      el.style.height = `${nextHeight}px`;
+      lastHeightRef.current = nextHeight;
+    }
+
+    const nextOverflow = rawScrollHeight > nextHeight ? 'auto' : 'hidden';
+    if (el.style.overflowY !== nextOverflow) {
+      el.style.overflowY = nextOverflow;
+    }
   }, []);
 
-  useEffect(() => {
-    adjustTextareaHeight();
+  useLayoutEffect(() => {
+    adjustTextareaHeight(false);
   }, [inputText, adjustTextareaHeight]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handleViewportChange = () => adjustTextareaHeight();
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('orientationchange', handleViewportChange);
+    let rafId = 0;
+    const handleViewportChange = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(() => adjustTextareaHeight(true));
+    };
+    window.addEventListener('resize', handleViewportChange, { passive: true });
+    window.addEventListener('orientationchange', handleViewportChange, { passive: true });
     return () => {
+      window.cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('orientationchange', handleViewportChange);
     };
@@ -90,7 +127,9 @@ export function TextEditorWindow({
         <div className="flex items-center gap-2 shrink-0">
           <div className="font-mono text-[11px] sm:text-xs text-[#DCE4F5] tabular-nums whitespace-nowrap">
             {metrics.words > 0 && (
-              <span className="md:hidden">{metrics.words.toLocaleString()}w</span>
+              <span className="md:hidden retro-pop-in inline-block">
+                {metrics.words.toLocaleString()}w
+              </span>
             )}
             <span className="hidden md:inline">
               {metrics.words.toLocaleString()} words &middot; {metrics.chars.toLocaleString()} /{' '}
@@ -104,7 +143,7 @@ export function TextEditorWindow({
               type="button"
               onClick={onClearText}
               aria-label="Clear Text"
-              className="md:hidden min-h-[44px] min-w-[44px] px-2 -mr-2 inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[#FDE047] underline underline-offset-2 touch-manipulation cursor-pointer"
+              className="md:hidden retro-pop-in min-h-[44px] min-w-[44px] px-2 -mr-2 inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[#FDE047] underline underline-offset-2 touch-manipulation cursor-pointer"
             >
               Clear
             </button>
@@ -123,7 +162,7 @@ export function TextEditorWindow({
               <button
                 type="button"
                 disabled={isAnyBusy}
-                onClick={() => onChangeText(sample.text)}
+                onClick={() => onLoadSampleText(sample.text)}
                 aria-label={`Load sample: ${sample.label}`}
                 className="retro-link min-h-[44px] inline-flex items-center disabled:opacity-50 whitespace-nowrap shrink-0"
               >
@@ -139,7 +178,11 @@ export function TextEditorWindow({
         </div>
 
         {/* Auto-expanding Sunken Document Textarea (16px font prevents iOS zoom jump) */}
-        <div className="retro-well min-w-0">
+        <div
+          className={`retro-well retro-well-input min-w-0 ${
+            isSampleFlashing ? 'retro-sample-enter' : ''
+          }`}
+        >
           <textarea
             ref={textareaRef}
             id="studio-original-textarea"
@@ -166,7 +209,7 @@ export function TextEditorWindow({
         {metrics.isOverLimit && (
           <div
             role="alert"
-            className="bg-[#FDF0ED] border-2 border-[#B41616] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+            className="retro-banner-enter bg-[#FDF0ED] border-2 border-[#B41616] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
           >
             <p className="text-xs sm:text-sm text-[#6E0D0D] leading-relaxed break-words">
               <strong className="font-mono font-semibold">Limit Exceeded: </strong>
@@ -184,7 +227,7 @@ export function TextEditorWindow({
 
         {/* Long multi-chunk notice (concise) */}
         {metrics.isLongChunked && !metrics.isOverLimit && (
-          <p className="font-mono text-[11px] sm:text-xs text-[#142850] bg-[#E5EAF5] border border-[#142850] px-2.5 py-1.5 break-words">
+          <p className="retro-banner-enter font-mono text-[11px] sm:text-xs text-[#142850] bg-[#E5EAF5] border border-[#142850] px-2.5 py-1.5 break-words">
             <span className="md:hidden">Long text ({metrics.words.toLocaleString()}w)</span>
             <span className="hidden md:inline">
               Long-form ({metrics.words.toLocaleString()}w): splits cleanly by paragraph without summarizing.
@@ -197,7 +240,7 @@ export function TextEditorWindow({
           <div
             role="region"
             aria-label="Confirm replacing edited results"
-            className="bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+            className="retro-banner-enter bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
           >
             <p className="text-xs sm:text-sm text-[#3D2200] leading-relaxed">
               <strong className="font-mono font-semibold">Replace your manual edits?</strong>
@@ -306,7 +349,7 @@ export function TextEditorWindow({
 
         {/* Helper & Live Counter Footer — Desktop only so mobile stays crisp & uncluttered */}
         <div className="hidden md:flex flex-wrap items-center justify-between gap-2 text-xs text-[#4B4639]">
-          <p className="leading-relaxed">
+          <p className="leading-relaxed transition-opacity duration-150">
             {chatModeEnabled
               ? 'Chat Mode ON: compresses your message into short, real American texts.'
               : 'Preserves your exact meaning across four American voices.'}
@@ -318,4 +361,4 @@ export function TextEditorWindow({
       </div>
     </section>
   );
-}
+});

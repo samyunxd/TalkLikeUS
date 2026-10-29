@@ -11,21 +11,19 @@
     font-family: var(--font-sans);
     background-color: #eae6d7;
     color: #141b29;
-    scroll-behavior: smooth;
     overflow-x: clip;
     -webkit-text-size-adjust: 100%;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
     *,
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
     }
   }
 
@@ -91,9 +89,27 @@
   box-shadow:
     inset 2px 2px 0 #cdc7b4,
     inset -1px -1px 0 #f8f6ef;
+  transition:
+    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 130ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Tactile 1990s raised button — optimized for touch & pointer */
+.retro-well-input:focus-within {
+  border-color: #142850;
+  box-shadow:
+    inset 2px 2px 0 #b8c7e6,
+    inset -1px -1px 0 #f8f6ef,
+    0 0 0 1px #142850;
+}
+
+.retro-well-copyable:active {
+  transform: scale(0.996);
+}
+
+/* Tactile 1990s raised button — crisp keycap hover & press physics */
 .retro-btn {
   font-family: var(--font-mono);
   background-color: #e5e0d0;
@@ -103,7 +119,13 @@
     inset 1px 1px 0 #ffffff,
     inset -2px -2px 0 #aba48e,
     2px 2px 0 #141b29;
-  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
+  transition:
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 140ms ease;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -113,6 +135,11 @@
 @media (hover: hover) {
   .retro-btn:hover:not(:disabled) {
     background-color: #efeadd;
+    transform: translate(-1px, -1px);
+    box-shadow:
+      inset 1px 1px 0 #ffffff,
+      inset -2px -2px 0 #aba48e,
+      3px 3px 0 #141b29;
   }
 }
 
@@ -139,7 +166,11 @@
     inset 2px 2px 0 #ff7575,
     inset -2px -2px 0 #8f1111,
     2px 2px 0 #141b29;
-  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms ease;
+  transition:
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 140ms ease;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -149,6 +180,11 @@
 @media (hover: hover) {
   .retro-btn-primary:hover:not(:disabled) {
     background-color: #c21b1b;
+    transform: translate(-1px, -1px);
+    box-shadow:
+      inset 2px 2px 0 #ff7575,
+      inset -2px -2px 0 #8f1111,
+      3px 3px 0 #141b29;
   }
 }
 
@@ -243,6 +279,7 @@ textarea::-webkit-scrollbar {
   color: #0000ee;
   text-decoration: underline;
   text-underline-offset: 3px;
+  transition: color 130ms ease, opacity 130ms ease;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -259,16 +296,95 @@ textarea::-webkit-scrollbar {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
+  transition: color 130ms ease;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Compositor-only Pixel Loading Animations */
+/* Compositor-Only Smooth Entrance, Shimmer & Feedback Animations */
+@keyframes retro-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes retro-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes retro-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes retro-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes retro-sample-flash {
+  0% {
+    opacity: 0.65;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes retro-shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes retro-pixel-spin {
   from {
     transform: rotate(0deg);
   }
   to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes retro-hourglass-flip {
+  0%,
+  42% {
+    transform: rotate(0deg);
+  }
+  50%,
+  92% {
+    transform: rotate(180deg);
+  }
+  100% {
     transform: rotate(360deg);
   }
 }
@@ -285,8 +401,67 @@ textarea::-webkit-scrollbar {
   }
 }
 
+.retro-view-enter {
+  animation: retro-view-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.retro-card-enter {
+  animation: retro-card-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.retro-stagger-1 {
+  animation-delay: 0ms;
+}
+
+.retro-stagger-2 {
+  animation-delay: 45ms;
+}
+
+.retro-stagger-3 {
+  animation-delay: 90ms;
+}
+
+.retro-stagger-4 {
+  animation-delay: 135ms;
+}
+
+.retro-pop-in {
+  animation: retro-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.retro-banner-enter {
+  animation: retro-banner-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.retro-sample-enter {
+  animation: retro-sample-flash 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.retro-shimmer-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.retro-shimmer-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(20, 40, 80, 0.08) 50%,
+    transparent 100%
+  );
+  animation: retro-shimmer-sweep 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
 .retro-spin-steps {
   animation: retro-pixel-spin 0.72s steps(8, end) infinite;
+}
+
+.retro-hourglass-spin {
+  animation: retro-hourglass-flip 1.25s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 .retro-loader-block-1 {
@@ -302,4 +477,73 @@ textarea::-webkit-scrollbar {
 .retro-loader-block-3 {
   animation: retro-block-pulse 0.75s ease-in-out infinite;
   animation-delay: 300ms;
+}
+
+/* Smooth CSS Grid Accordion for Teach Me Notes */
+.retro-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0 !important;
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 240ms;
+}
+
+.retro-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.retro-collapse-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0.5rem !important;
+  visibility: visible;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0s;
+}
+
+.retro-collapse-mobile-only {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0.5rem !important;
+  visibility: visible;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0s;
+}
+
+@media (min-width: 768px) {
+  .retro-collapse-mobile-only {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-top: 0 !important;
+    visibility: hidden;
+    transition:
+      grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      visibility 0s linear 240ms;
+  }
+
+  .retro-collapse-desktop-only {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    margin-top: 0.5rem !important;
+    visibility: visible;
+    transition:
+      grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      visibility 0s linear 0s;
+  }
 }

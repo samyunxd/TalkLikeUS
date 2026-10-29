@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { InfoViews } from './components/InfoViews';
 import { ModeResultCard } from './components/ModeResultCard';
-import { PixelChatModeIcon, PixelFlagStamp } from './components/PixelIcons';
+import { PixelChatModeIcon, PixelFlagStamp, PixelModeIcon } from './components/PixelIcons';
 import { RetroHeader, type ActiveNavSection } from './components/RetroHeader';
 import { TextEditorWindow } from './components/TextEditorWindow';
 import { MODE_CONFIGS, ORDERED_MODE_CONFIGS } from './config/modes';
@@ -19,6 +19,20 @@ import {
 import { SAMPLE_PROMPTS, trimToSafeBoundary } from './utils/textStats';
 
 type ResultsMap = Record<VoiceMode, ModeTransformation>;
+
+const STAGGER_CLASSES = [
+  'retro-stagger-1',
+  'retro-stagger-2',
+  'retro-stagger-3',
+  'retro-stagger-4',
+] as const;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 function buildResultsMap(results: ModeTransformation[], chatMode: boolean): ResultsMap {
   const map = {} as ResultsMap;
@@ -46,9 +60,10 @@ export default function App() {
   const [submittedSourceText, setSubmittedSourceText] = useState<string>('');
   const [teachMe, setTeachMe] = useState<boolean>(true);
   const [chatModeEnabled, setChatModeEnabled] = useState<boolean>(false);
-  const [sampleIndex, setSampleIndex] = useState<number>(0);
+  const [sampleFlashTrigger, setSampleFlashTrigger] = useState<number>(0);
 
   const [resultsMap, setResultsMap] = useState<ResultsMap | null>(null);
+  const [generationBatchId, setGenerationBatchId] = useState<number>(0);
   const [resultsBatchChatMode, setResultsBatchChatMode] = useState<boolean>(false);
   const [pendingReplaceAllAction, setPendingReplaceAllAction] = useState<(() => void) | null>(null);
 
@@ -71,18 +86,15 @@ export default function App() {
 
   const transformAbortRef = useRef<AbortController | null>(null);
   const inFlightLockRef = useRef<boolean>(false);
+  const inFlightNotesRef = useRef<boolean>(false);
   const inFlightModesRef = useRef<Record<VoiceMode, boolean>>({
     natural_american: false,
     casual_slang: false,
     unfiltered_blunt: false,
     badass_confident: false,
   });
+  const sampleIndexRef = useRef<number>(0);
   const resultsAnchorRef = useRef<HTMLDivElement | null>(null);
-
-  const announce = useCallback((msg: string) => {
-    setLiveAnnouncement('');
-    window.setTimeout(() => setLiveAnnouncement(msg), 30);
-  }, []);
 
   const isAnyModeRegenerating = Object.values(regeneratingModes).some(Boolean);
   const isAnyBusy = isTransformingAll || isAnyModeRegenerating;
@@ -90,6 +102,33 @@ export default function App() {
   const hasAnyManualEdits = resultsMap
     ? VOICE_MODES.some((m) => Boolean(resultsMap[m].isEdited))
     : false;
+
+  // Latest state snapshot ref so memoized child callbacks stay referentially stable across keystrokes
+  const latestRef = useRef({
+    inputText,
+    submittedSourceText,
+    teachMe,
+    chatModeEnabled,
+    resultsMap,
+    isAnyBusy,
+    hasAnyManualEdits,
+    pendingReplaceAllAction,
+  });
+  latestRef.current = {
+    inputText,
+    submittedSourceText,
+    teachMe,
+    chatModeEnabled,
+    resultsMap,
+    isAnyBusy,
+    hasAnyManualEdits,
+    pendingReplaceAllAction,
+  };
+
+  const announce = useCallback((msg: string) => {
+    setLiveAnnouncement('');
+    window.setTimeout(() => setLiveAnnouncement(msg), 30);
+  }, []);
 
   const executeTransformAll = useCallback(
     async (textToProcess: string, teachMeOn: boolean, chatModeOn: boolean) => {
@@ -120,16 +159,17 @@ export default function App() {
 
         setSubmittedSourceText(trimmed);
         setResultsMap(buildResultsMap(res.results, chatModeOn));
+        setGenerationBatchId((prev) => prev + 1);
         setResultsBatchChatMode(chatModeOn);
         announce('All four American voices are ready.');
 
         window.setTimeout(() => {
           const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
           resultsAnchorRef.current?.scrollIntoView({
-            behavior: 'smooth',
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
             block: isMobile ? 'start' : 'nearest',
           });
-        }, 80);
+        }, 60);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
@@ -158,8 +198,9 @@ export default function App() {
 
   const requestBatchTransformWithEditGuard = useCallback(
     (textToProcess: string, teachMeOn: boolean, chatModeOn: boolean) => {
-      if (isAnyBusy || inFlightLockRef.current || !textToProcess.trim()) return;
-      if (hasAnyManualEdits) {
+      const { isAnyBusy: busy, hasAnyManualEdits: hasEdits } = latestRef.current;
+      if (busy || inFlightLockRef.current || !textToProcess.trim()) return;
+      if (hasEdits) {
         setPendingReplaceAllAction(() => () => {
           void executeTransformAll(textToProcess, teachMeOn, chatModeOn);
         });
@@ -168,20 +209,31 @@ export default function App() {
       }
       void executeTransformAll(textToProcess, teachMeOn, chatModeOn);
     },
-    [announce, executeTransformAll, hasAnyManualEdits, isAnyBusy]
+    [announce, executeTransformAll]
   );
 
-  const handleAmericanizeSubmit = () => {
-    requestBatchTransformWithEditGuard(inputText, teachMe, chatModeEnabled);
-  };
+  const handleAmericanizeSubmit = useCallback(() => {
+    const { inputText: txt, teachMe: tm, chatModeEnabled: cm } = latestRef.current;
+    requestBatchTransformWithEditGuard(txt, tm, cm);
+  }, [requestBatchTransformWithEditGuard]);
 
-  const handleClearText = () => {
-    if (isAnyBusy) return;
+  const handleClearText = useCallback(() => {
+    if (latestRef.current.isAnyBusy) return;
     setInputText('');
     setErrorBanner(null);
     setPendingReplaceAllAction(null);
     announce('Cleared text editor.');
-  };
+  }, [announce]);
+
+  const handleConfirmReplaceAll = useCallback(() => {
+    const action = latestRef.current.pendingReplaceAllAction;
+    setPendingReplaceAllAction(null);
+    action?.();
+  }, []);
+
+  const handleCancelReplaceAll = useCallback(() => {
+    setPendingReplaceAllAction(null);
+  }, []);
 
   const handleUpdateModeTextLive = useCallback((mode: VoiceMode, nextText: string) => {
     setResultsMap((prev) => {
@@ -219,7 +271,15 @@ export default function App() {
 
   const executeSingleRegenerate = useCallback(
     async (mode: VoiceMode) => {
-      const source = inputText.trim() || submittedSourceText;
+      const {
+        inputText: currentInput,
+        submittedSourceText: currentSubmitted,
+        teachMe: tm,
+        chatModeEnabled: cm,
+        resultsMap: currentMap,
+      } = latestRef.current;
+
+      const source = currentInput.trim() || currentSubmitted;
       if (!source || inFlightModesRef.current[mode] || inFlightLockRef.current) return;
 
       inFlightModesRef.current[mode] = true;
@@ -227,17 +287,17 @@ export default function App() {
       setRegeneratingModes((prev) => ({ ...prev, [mode]: true }));
       const modeTitle = MODE_CONFIGS[mode].title;
       announce(
-        chatModeEnabled
+        cm
           ? `Regenerating ${modeTitle} with Chat Mode...`
           : `Regenerating ${modeTitle}...`
       );
 
-      const previousResult = resultsMap?.[mode]?.generatedText || resultsMap?.[mode]?.text;
+      const previousResult = currentMap?.[mode]?.generatedText || currentMap?.[mode]?.text;
       const otherResults: Partial<Record<VoiceMode, string>> = {};
-      if (resultsMap) {
+      if (currentMap) {
         for (const m of VOICE_MODES) {
           if (m !== mode) {
-            otherResults[m] = resultsMap[m].text;
+            otherResults[m] = currentMap[m].text;
           }
         }
       }
@@ -246,8 +306,8 @@ export default function App() {
         const res = await requestSingleRegeneration({
           text: source,
           mode,
-          teachMe,
-          chatMode: chatModeEnabled,
+          teachMe: tm,
+          chatMode: cm,
           previousResult,
           otherResults,
         });
@@ -265,14 +325,14 @@ export default function App() {
               explanations: res.result.explanations || [],
               toneSummary: res.result.toneSummary,
               reusablePattern: res.result.reusablePattern,
-              chatMode: res.result.chatMode ?? chatModeEnabled,
+              chatMode: res.result.chatMode ?? cm,
             },
           };
           const allMatchCurrentToggle = VOICE_MODES.every(
-            (m) => Boolean(next[m].chatMode) === chatModeEnabled
+            (m) => Boolean(next[m].chatMode) === latestRef.current.chatModeEnabled
           );
           if (allMatchCurrentToggle) {
-            setResultsBatchChatMode(chatModeEnabled);
+            setResultsBatchChatMode(latestRef.current.chatModeEnabled);
           }
           return next;
         });
@@ -286,7 +346,9 @@ export default function App() {
         setErrorBanner({
           message,
           retryable,
-          retryFn: () => executeSingleRegenerate(mode),
+          retryFn: () => {
+            void executeSingleRegenerate(mode);
+          },
         });
         announce(`Error regenerating ${modeTitle}: ${message}`);
       } finally {
@@ -294,12 +356,20 @@ export default function App() {
         setRegeneratingModes((prev) => ({ ...prev, [mode]: false }));
       }
     },
-    [announce, chatModeEnabled, inputText, resultsMap, submittedSourceText, teachMe]
+    [announce]
+  );
+
+  const handleRegenerateMode = useCallback(
+    (mode: VoiceMode) => {
+      void executeSingleRegenerate(mode);
+    },
+    [executeSingleRegenerate]
   );
 
   const fetchNotesForExistingResults = useCallback(
     async (currentMap: ResultsMap, source: string, isChat: boolean) => {
-      if (!source || isLoadingNotes) return;
+      if (!source || inFlightNotesRef.current) return;
+      inFlightNotesRef.current = true;
       setIsLoadingNotes(true);
       try {
         const res = await requestTeachMeExplanations({
@@ -338,62 +408,114 @@ export default function App() {
         setErrorBanner({
           message,
           retryable: true,
-          retryFn: () => fetchNotesForExistingResults(currentMap, source, isChat),
+          retryFn: () => {
+            void fetchNotesForExistingResults(currentMap, source, isChat);
+          },
         });
       } finally {
+        inFlightNotesRef.current = false;
         setIsLoadingNotes(false);
       }
     },
-    [announce, isLoadingNotes]
+    [announce]
   );
 
-  const handleToggleTeachMe = () => {
-    const nextVal = !teachMe;
+  const handleRequestNotesFromCard = useCallback(() => {
+    const {
+      resultsMap: currentMap,
+      submittedSourceText: currentSubmitted,
+      inputText: currentInput,
+    } = latestRef.current;
+    if (!currentMap) return;
+    const source = currentSubmitted || currentInput.trim();
+    const anyChat = VOICE_MODES.some((m) => Boolean(currentMap[m].chatMode));
+    void fetchNotesForExistingResults(currentMap, source, anyChat);
+  }, [fetchNotesForExistingResults]);
+
+  const handleToggleTeachMe = useCallback(() => {
+    const {
+      teachMe: prevTeachMe,
+      resultsMap: currentMap,
+      submittedSourceText: currentSubmitted,
+      inputText: currentInput,
+    } = latestRef.current;
+    const nextVal = !prevTeachMe;
     setTeachMe(nextVal);
     announce(nextVal ? 'Teach Me enabled.' : 'Teach Me disabled.');
 
-    if (nextVal && resultsMap) {
+    if (nextVal && currentMap && !inFlightNotesRef.current) {
       const missingNotes = VOICE_MODES.some(
-        (m) => resultsMap[m].explanations.length === 0 && !resultsMap[m].toneSummary
+        (m) => currentMap[m].explanations.length === 0 && !currentMap[m].toneSummary
       );
-      if (missingNotes && !isLoadingNotes) {
-        const source = submittedSourceText || inputText.trim();
-        const anyChat = VOICE_MODES.some((m) => Boolean(resultsMap[m].chatMode));
-        void fetchNotesForExistingResults(resultsMap, source, anyChat);
+      if (missingNotes) {
+        const source = currentSubmitted || currentInput.trim();
+        const anyChat = VOICE_MODES.some((m) => Boolean(currentMap[m].chatMode));
+        void fetchNotesForExistingResults(currentMap, source, anyChat);
       }
     }
-  };
+  }, [announce, fetchNotesForExistingResults]);
 
-  const handleToggleChatMode = () => {
-    const nextVal = !chatModeEnabled;
+  const handleToggleChatMode = useCallback(() => {
+    const nextVal = !latestRef.current.chatModeEnabled;
     setChatModeEnabled(nextVal);
     announce(
       nextVal
         ? 'Chat Mode ON. Applies to your next generation or regeneration.'
         : 'Chat Mode OFF. Applies to your next generation or regeneration.'
     );
-  };
+  }, [announce]);
 
-  const handleCycleSample = () => {
-    const sample = SAMPLE_PROMPTS[sampleIndex % SAMPLE_PROMPTS.length];
-    setSampleIndex((prev) => prev + 1);
-    setInputText(sample.text);
-    setActiveSection('home');
-    announce(`Loaded sample: ${sample.label}`);
-  };
+  const handleLoadSampleText = useCallback(
+    (sampleText: string, label?: string) => {
+      setInputText(sampleText);
+      setSampleFlashTrigger((prev) => prev + 1);
+      setActiveSection('home');
+      if (label) {
+        announce(`Loaded sample: ${label}`);
+      }
+    },
+    [announce]
+  );
 
-  const handleSelectSection = (section: ActiveNavSection) => {
+  const handleCycleSample = useCallback(() => {
+    const idx = sampleIndexRef.current;
+    const sample = SAMPLE_PROMPTS[idx % SAMPLE_PROMPTS.length];
+    sampleIndexRef.current = idx + 1;
+    handleLoadSampleText(sample.text, sample.label);
+  }, [handleLoadSampleText]);
+
+  const handleSelectSection = useCallback((section: ActiveNavSection) => {
     setActiveSection(section);
     if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({
+        top: 0,
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     }
-  };
+  }, []);
 
-  const handleTrimOversizedInput = () => {
+  const handleReturnToStudio = useCallback(() => {
+    handleSelectSection('home');
+  }, [handleSelectSection]);
+
+  const handleLoadSampleFromInfo = useCallback(
+    (sampleText: string) => {
+      handleLoadSampleText(sampleText, 'Quick example');
+      if (typeof window !== 'undefined') {
+        window.scrollTo({
+          top: 0,
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        });
+      }
+    },
+    [handleLoadSampleText]
+  );
+
+  const handleTrimOversizedInput = useCallback(() => {
     setInputText((prev) => trimToSafeBoundary(prev));
     setErrorBanner(null);
     announce('Input trimmed cleanly to the nearest paragraph boundary within the studio limit.');
-  };
+  }, [announce]);
 
   const allDisplayedAreChat = resultsMap
     ? VOICE_MODES.every((m) => Boolean(resultsMap[m].chatMode))
@@ -424,172 +546,205 @@ export default function App() {
       />
 
       {/* Responsive Studio Content Container */}
-      <main className="flex-1 w-full max-w-4xl mx-auto safe-area-x py-3 md:py-8 space-y-3 md:space-y-6 min-w-0">
-        {activeSection !== 'home' ? (
-          <InfoViews
-            section={activeSection}
-            onReturnToStudio={() => handleSelectSection('home')}
-            onLoadSampleAndReturn={(sample) => {
-              setInputText(sample);
-              handleSelectSection('home');
-            }}
-          />
-        ) : (
-          <>
-            {/* Studio Hero Banner — Minimal 1-line prompt on mobile, full editorial header on desktop */}
-            <section className="text-center space-y-1 md:space-y-2.5 max-w-2xl mx-auto">
-              <div className="hidden md:inline-flex items-center justify-center gap-2.5 font-mono text-xs text-[#3E3A30]">
-                <PixelFlagStamp className="w-7 h-4 shrink-0" />
-                <span>TalkLikeUS &middot; American English Voice Lab</span>
-              </div>
-
-              <h1 className="font-mono text-lg min-[375px]:text-xl md:text-4xl font-bold text-[#141B29] tracking-tight leading-tight text-balance">
-                Say it like you mean it.
-              </h1>
-
-              <p className="hidden md:block text-base text-[#2C3342] leading-relaxed text-balance">
-                Drop your text. Get four American voices. Keep the one that sounds like you.
-              </p>
-            </section>
-
-            {/* Error Alert Window */}
-            {errorBanner && (
-              <div
-                role="alert"
-                className="retro-window !bg-[#FDF0ED] !border-[#B41616] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
-              >
-                <div className="space-y-1 min-w-0">
-                  <p className="font-mono text-xs font-bold text-[#8F1111]">
-                    Transformation Notice
-                  </p>
-                  <p className="text-sm text-[#4A0B0B] leading-relaxed break-words">
-                    {errorBanner.message}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2.5 shrink-0">
-                  {errorBanner.retryable && errorBanner.retryFn && (
-                    <button
-                      type="button"
-                      onClick={() => errorBanner.retryFn?.()}
-                      className="retro-btn min-h-[44px] px-4 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-                    >
-                      Retry
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setErrorBanner(null)}
-                    className="retro-btn min-h-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Main Studio Text Editor */}
-            <TextEditorWindow
-              inputText={inputText}
-              onChangeText={setInputText}
-              onClearText={handleClearText}
-              teachMe={teachMe}
-              onToggleTeachMe={handleToggleTeachMe}
-              chatModeEnabled={chatModeEnabled}
-              onToggleChatMode={handleToggleChatMode}
-              isTransformingAll={isTransformingAll}
-              isAnyBusy={isAnyBusy}
-              onSubmitTransform={handleAmericanizeSubmit}
-              onTrimToLimit={handleTrimOversizedInput}
-              pendingReplaceAllConfirm={pendingReplaceAllAction !== null}
-              onConfirmReplaceAll={() => {
-                const action = pendingReplaceAllAction;
-                setPendingReplaceAllAction(null);
-                action?.();
-              }}
-              onCancelReplaceAll={() => setPendingReplaceAllAction(null)}
+      <main className="flex-1 w-full max-w-4xl mx-auto safe-area-x py-3 md:py-8 min-w-0">
+        <div
+          key={activeSection}
+          className="retro-view-enter space-y-3 md:space-y-6 min-w-0"
+        >
+          {activeSection !== 'home' ? (
+            <InfoViews
+              section={activeSection}
+              onReturnToStudio={handleReturnToStudio}
+              onLoadSampleAndReturn={handleLoadSampleFromInfo}
             />
+          ) : (
+            <>
+              {/* Studio Hero Banner — Minimal 1-line prompt on mobile, full editorial header on desktop */}
+              <section className="text-center space-y-1 md:space-y-2.5 max-w-2xl mx-auto">
+                <div className="hidden md:inline-flex items-center justify-center gap-2.5 font-mono text-xs text-[#3E3A30]">
+                  <PixelFlagStamp className="w-7 h-4 shrink-0" />
+                  <span>TalkLikeUS &middot; American English Voice Lab</span>
+                </div>
 
-            {/* Vertical List of Four Result Cards */}
-            {resultsMap && (
-              <section
-                ref={resultsAnchorRef}
-                aria-label="Generated American English voices"
-                className="retro-window divide-y-2 divide-[#141B29] min-w-0"
-              >
-                {showResultsStatusStrip && (
-                  <div className="hidden md:flex px-5 py-2.5 bg-[#E6E2D2] items-center justify-between gap-3 font-mono text-xs min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-[#141B29] min-w-0">
-                      <PixelChatModeIcon className="w-4 h-4 shrink-0" />
-                      {allDisplayedAreChat ? (
-                        <span className="font-bold text-[#15603A]">CHAT MODE ENABLED</span>
-                      ) : anyDisplayedAreChat ? (
-                        <span className="font-semibold text-[#142850]">
-                          MIXED MODE RESULTS (Chat rows marked)
-                        </span>
-                      ) : (
-                        <span className="font-semibold text-[#3E3A30]">
-                          CURRENT RESULTS: STANDARD MODE
-                        </span>
-                      )}
+                <h1 className="font-mono text-lg min-[375px]:text-xl md:text-4xl font-bold text-[#141B29] tracking-tight leading-tight text-balance">
+                  Say it like you mean it.
+                </h1>
 
-                      {hasPendingChatModeDiff && (
-                        <>
-                          <span aria-hidden="true" className="text-[#8E8772]">
-                            &middot;
-                          </span>
-                          <span className="text-[#2C3342]">
-                            <strong>CHAT MODE: {chatModeEnabled ? 'ON' : 'OFF'}</strong> applies next
-                          </span>
-                        </>
-                      )}
-                    </div>
+                <p className="hidden md:block text-base text-[#2C3342] leading-relaxed text-balance">
+                  Drop your text. Get four American voices. Keep the one that sounds like you.
+                </p>
+              </section>
 
-                    {hasPendingChatModeDiff && (
+              {/* Error Alert Window */}
+              {errorBanner && (
+                <div
+                  role="alert"
+                  className="retro-window retro-banner-enter !bg-[#FDF0ED] !border-[#B41616] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <p className="font-mono text-xs font-bold text-[#8F1111]">
+                      Transformation Notice
+                    </p>
+                    <p className="text-sm text-[#4A0B0B] leading-relaxed break-words">
+                      {errorBanner.message}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {errorBanner.retryable && errorBanner.retryFn && (
                       <button
                         type="button"
-                        disabled={isAnyBusy}
-                        onClick={() =>
-                          requestBatchTransformWithEditGuard(
-                            inputText.trim() || submittedSourceText,
-                            teachMe,
-                            chatModeEnabled
-                          )
-                        }
-                        className="retro-link min-h-[44px] inline-flex items-center text-xs font-semibold disabled:opacity-50 whitespace-nowrap shrink-0"
+                        onClick={() => errorBanner.retryFn?.()}
+                        className="retro-btn min-h-[44px] px-4 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
                       >
-                        Regenerate All with Chat Mode {chatModeEnabled ? 'ON' : 'OFF'}
+                        Retry
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setErrorBanner(null)}
+                      className="retro-btn min-h-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
+                    >
+                      Dismiss
+                    </button>
                   </div>
-                )}
+                </div>
+              )}
 
-                {ORDERED_MODE_CONFIGS.map((cfg) => (
-                  <ModeResultCard
-                    key={cfg.id}
-                    config={cfg}
-                    data={resultsMap[cfg.id]}
-                    teachMe={teachMe}
-                    isRegenerating={regeneratingModes[cfg.id]}
-                    isAnyTransformAllRunning={isTransformingAll}
-                    isLoadingNotes={isLoadingNotes}
-                    onUpdateText={(nextText) => handleUpdateModeTextLive(cfg.id, nextText)}
-                    onResetEditedText={() => handleResetModeEdit(cfg.id)}
-                    onRegenerate={() => void executeSingleRegenerate(cfg.id)}
-                    onRequestNotes={() =>
-                      void fetchNotesForExistingResults(
-                        resultsMap,
-                        submittedSourceText || inputText.trim(),
-                        anyDisplayedAreChat
-                      )
-                    }
-                    onAnnounce={announce}
-                  />
-                ))}
-              </section>
-            )}
-          </>
-        )}
+              {/* Main Studio Text Editor */}
+              <TextEditorWindow
+                inputText={inputText}
+                sampleFlashTrigger={sampleFlashTrigger}
+                onChangeText={setInputText}
+                onLoadSampleText={handleLoadSampleText}
+                onClearText={handleClearText}
+                teachMe={teachMe}
+                onToggleTeachMe={handleToggleTeachMe}
+                chatModeEnabled={chatModeEnabled}
+                onToggleChatMode={handleToggleChatMode}
+                isTransformingAll={isTransformingAll}
+                isAnyBusy={isAnyBusy}
+                onSubmitTransform={handleAmericanizeSubmit}
+                onTrimToLimit={handleTrimOversizedInput}
+                pendingReplaceAllConfirm={pendingReplaceAllAction !== null}
+                onConfirmReplaceAll={handleConfirmReplaceAll}
+                onCancelReplaceAll={handleCancelReplaceAll}
+              />
+
+              {/* Instantaneous Shimmer Skeleton Preview on First Generation */}
+              {isTransformingAll && !resultsMap && (
+                <section
+                  ref={resultsAnchorRef}
+                  aria-label="Generating American English voices"
+                  aria-busy="true"
+                  className="retro-window retro-view-enter divide-y-2 divide-[#141B29] min-w-0"
+                >
+                  {ORDERED_MODE_CONFIGS.map((cfg, idx) => (
+                    <div
+                      key={cfg.id}
+                      className={`retro-card-enter ${
+                        STAGGER_CLASSES[idx] ?? 'retro-stagger-1'
+                      } px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0`}
+                    >
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <span
+                          className={`${cfg.headerBgClass} p-1 border border-[#141B29] inline-flex items-center justify-center shrink-0`}
+                        >
+                          <PixelModeIcon mode={cfg.id} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        </span>
+                        <h3 className="font-mono text-xs min-[375px]:text-sm md:text-base font-bold text-[#141B29] truncate">
+                          {cfg.number}. {cfg.title}
+                        </h3>
+                      </div>
+
+                      <div
+                        aria-hidden="true"
+                        className="retro-well retro-shimmer-surface px-3 md:px-3.5 py-3 md:py-3.5 space-y-2"
+                      >
+                        <div className="h-3.5 w-11/12 bg-[#E8E4D5]" />
+                        <div className="h-3.5 w-3/4 bg-[#EFECE0]" />
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+
+              {/* Vertical List of Four Result Cards */}
+              {resultsMap && (
+                <section
+                  ref={resultsAnchorRef}
+                  aria-label="Generated American English voices"
+                  className="retro-window divide-y-2 divide-[#141B29] min-w-0"
+                >
+                  {showResultsStatusStrip && (
+                    <div className="hidden md:flex px-5 py-2.5 bg-[#E6E2D2] items-center justify-between gap-3 font-mono text-xs min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-[#141B29] min-w-0">
+                        <PixelChatModeIcon className="w-4 h-4 shrink-0" />
+                        {allDisplayedAreChat ? (
+                          <span className="font-bold text-[#15603A]">CHAT MODE ENABLED</span>
+                        ) : anyDisplayedAreChat ? (
+                          <span className="font-semibold text-[#142850]">
+                            MIXED MODE RESULTS (Chat rows marked)
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-[#3E3A30]">
+                            CURRENT RESULTS: STANDARD MODE
+                          </span>
+                        )}
+
+                        {hasPendingChatModeDiff && (
+                          <>
+                            <span aria-hidden="true" className="text-[#8E8772]">
+                              &middot;
+                            </span>
+                            <span className="text-[#2C3342]">
+                              <strong>CHAT MODE: {chatModeEnabled ? 'ON' : 'OFF'}</strong> applies next
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {hasPendingChatModeDiff && (
+                        <button
+                          type="button"
+                          disabled={isAnyBusy}
+                          onClick={() =>
+                            requestBatchTransformWithEditGuard(
+                              inputText.trim() || submittedSourceText,
+                              teachMe,
+                              chatModeEnabled
+                            )
+                          }
+                          className="retro-link min-h-[44px] inline-flex items-center text-xs font-semibold disabled:opacity-50 whitespace-nowrap shrink-0"
+                        >
+                          Regenerate All with Chat Mode {chatModeEnabled ? 'ON' : 'OFF'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {ORDERED_MODE_CONFIGS.map((cfg, idx) => (
+                    <ModeResultCard
+                      key={`${cfg.id}-${generationBatchId}`}
+                      config={cfg}
+                      staggerIndex={idx}
+                      data={resultsMap[cfg.id]}
+                      teachMe={teachMe}
+                      isRegenerating={regeneratingModes[cfg.id]}
+                      isAnyTransformAllRunning={isTransformingAll}
+                      isLoadingNotes={isLoadingNotes}
+                      onUpdateModeText={handleUpdateModeTextLive}
+                      onResetModeEdit={handleResetModeEdit}
+                      onRegenerateMode={handleRegenerateMode}
+                      onRequestNotes={handleRequestNotesFromCard}
+                      onAnnounce={announce}
+                    />
+                  ))}
+                </section>
+              )}
+            </>
+          )}
+        </div>
       </main>
 
       {/* Quiet Authentic 1990s Footer */}

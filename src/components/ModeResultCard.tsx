@@ -1,34 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ModeConfig } from '../config/modes';
-import type { ModeTransformation } from '../types/transform';
+import type { ModeTransformation, VoiceMode } from '../types/transform';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { PixelBookIcon, PixelHourglassIcon, PixelModeIcon } from './PixelIcons';
 import { TeachMePanel } from './TeachMePanel';
 
 interface ModeResultCardProps {
   config: ModeConfig;
+  staggerIndex: number;
   data: ModeTransformation;
   teachMe: boolean;
   isRegenerating: boolean;
   isAnyTransformAllRunning: boolean;
   isLoadingNotes: boolean;
-  onUpdateText: (nextText: string) => void;
-  onResetEditedText: () => void;
-  onRegenerate: () => void;
+  onUpdateModeText: (mode: VoiceMode, nextText: string) => void;
+  onResetModeEdit: (mode: VoiceMode) => void;
+  onRegenerateMode: (mode: VoiceMode) => void;
   onRequestNotes: () => void;
   onAnnounce: (msg: string) => void;
 }
 
-export function ModeResultCard({
+const STAGGER_CLASSES = [
+  'retro-stagger-1',
+  'retro-stagger-2',
+  'retro-stagger-3',
+  'retro-stagger-4',
+] as const;
+
+export const ModeResultCard = memo(function ModeResultCard({
   config,
+  staggerIndex,
   data,
   teachMe,
   isRegenerating,
   isAnyTransformAllRunning,
   isLoadingNotes,
-  onUpdateText,
-  onResetEditedText,
-  onRegenerate,
+  onUpdateModeText,
+  onResetModeEdit,
+  onRegenerateMode,
   onRequestNotes,
   onAnnounce,
 }: ModeResultCardProps) {
@@ -37,9 +46,11 @@ export function ModeResultCard({
   const [confirmingReplace, setConfirmingReplace] = useState<boolean>(false);
   // Desktop toggle state; on mobile (<768px) Teach Me notes always show automatically when teachMe is ON
   const [notesOpen, setNotesOpen] = useState<boolean>(true);
+  const [regenAnimKey, setRegenAnimKey] = useState<number>(0);
 
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fallbackSelectRef = useRef<HTMLDivElement | null>(null);
+  const wasRegeneratingRef = useRef<boolean>(false);
 
   const syncEditHeight = useCallback(() => {
     const el = editTextareaRef.current;
@@ -50,7 +61,7 @@ export function ModeResultCard({
     el.style.overflowY = el.scrollHeight > nextH ? 'auto' : 'hidden';
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isEditing) {
       syncEditHeight();
     }
@@ -58,8 +69,12 @@ export function ModeResultCard({
 
   useEffect(() => {
     if (isRegenerating) {
+      wasRegeneratingRef.current = true;
       setConfirmingReplace(false);
       setIsEditing(false);
+    } else if (wasRegeneratingRef.current) {
+      wasRegeneratingRef.current = false;
+      setRegenAnimKey((prev) => prev + 1);
     }
   }, [isRegenerating]);
 
@@ -127,21 +142,37 @@ export function ModeResultCard({
       );
       return;
     }
-    onRegenerate();
+    onRegenerateMode(config.id);
   };
 
   const handleConfirmRegenerate = () => {
     setConfirmingReplace(false);
     setIsEditing(false);
-    onRegenerate();
+    onRegenerateMode(config.id);
   };
 
   const isDisabledActions = isRegenerating || isAnyTransformAllRunning;
+  const isRefreshingVisual = isRegenerating || isAnyTransformAllRunning;
+
+  const hasMobileNotes =
+    isLoadingNotes || data.explanations.length > 0 || Boolean(data.toneSummary);
+
+  const collapseStateClass = !teachMe
+    ? ''
+    : notesOpen
+      ? hasMobileNotes
+        ? 'retro-collapse-open'
+        : 'retro-collapse-desktop-only'
+      : hasMobileNotes
+        ? 'retro-collapse-mobile-only'
+        : '';
+
+  const staggerClass = STAGGER_CLASSES[staggerIndex] ?? 'retro-stagger-1';
 
   return (
     <article
       aria-labelledby={`mode-heading-${config.id}`}
-      className="px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0"
+      className={`retro-card-enter ${staggerClass} px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0`}
     >
       {/* Clean Single-Line Card Title */}
       <div className="flex items-center justify-between gap-2 min-w-0">
@@ -163,7 +194,7 @@ export function ModeResultCard({
             </span>
           )}
           {data.isEdited && (
-            <span className="hidden md:inline font-mono text-xs font-semibold text-[#6B3A00] whitespace-nowrap shrink-0">
+            <span className="hidden md:inline retro-pop-in font-mono text-xs font-semibold text-[#6B3A00] whitespace-nowrap shrink-0">
               &middot; Edited
             </span>
           )}
@@ -173,17 +204,17 @@ export function ModeResultCard({
           <span
             role="status"
             aria-live="polite"
-            className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-[#142850] whitespace-nowrap shrink-0"
+            className="retro-pop-in inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#142850] whitespace-nowrap shrink-0"
           >
-            <PixelHourglassIcon className="w-3 h-3 shrink-0" />
-            <span>Rewriting...</span>
+            <PixelHourglassIcon className="w-3.5 h-3.5 shrink-0 retro-hourglass-spin" />
+            <span>Rewriting</span>
           </span>
         ) : (
           copyStatus !== 'idle' && (
             <span
               role="status"
               aria-live="polite"
-              className={`font-mono text-[11px] whitespace-nowrap shrink-0 ${
+              className={`retro-pop-in font-mono text-[11px] whitespace-nowrap shrink-0 ${
                 copyStatus === 'copied'
                   ? 'font-bold text-[#15603A]'
                   : 'font-semibold text-[#B41616]'
@@ -197,8 +228,8 @@ export function ModeResultCard({
 
       {/* Output Area: Desktop Inline Editor OR Crisp White Text Well */}
       {isEditing ? (
-        <div className="hidden md:block space-y-2 min-w-0">
-          <div className="retro-well !border-[#142850] min-w-0">
+        <div className="hidden md:block retro-pop-in space-y-2 min-w-0">
+          <div className="retro-well retro-well-input !border-[#142850] min-w-0">
             <label htmlFor={`edit-textarea-${config.id}`} className="sr-only">
               Edit {config.title} result
             </label>
@@ -206,7 +237,7 @@ export function ModeResultCard({
               ref={editTextareaRef}
               id={`edit-textarea-${config.id}`}
               value={data.text}
-              onChange={(e) => onUpdateText(e.target.value)}
+              onChange={(e) => onUpdateModeText(config.id, e.target.value)}
               rows={3}
               inputMode="text"
               autoCapitalize="sentences"
@@ -228,7 +259,7 @@ export function ModeResultCard({
               <button
                 type="button"
                 onClick={() => {
-                  onResetEditedText();
+                  onResetModeEdit(config.id);
                   onAnnounce(`Restored original generated text for ${config.title}.`);
                 }}
                 className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
@@ -246,7 +277,9 @@ export function ModeResultCard({
               void handleCopy();
             }
           }}
-          className={`retro-well w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 transition-colors min-w-0 ${
+          className={`retro-well retro-well-copyable w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 min-w-0 ${
+            isRefreshingVisual ? 'retro-shimmer-surface opacity-75 ' : ''
+          }${
             copyStatus === 'copied'
               ? '!bg-[#E6F7EC] !border-[#15603A] cursor-pointer'
               : copyStatus === 'failed'
@@ -254,7 +287,12 @@ export function ModeResultCard({
                 : 'hover:bg-[#FAF8F1] active:bg-[#EFECE0] cursor-pointer'
           }`}
         >
-          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
+          <p
+            key={regenAnimKey}
+            className={`${
+              regenAnimKey > 0 ? 'retro-pop-in ' : ''
+            }whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]`}
+          >
             {data.text}
           </p>
         </div>
@@ -265,7 +303,7 @@ export function ModeResultCard({
         <div
           role="region"
           aria-label={`Confirm replacing manual edits in ${config.title}`}
-          className="hidden md:flex bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 items-center justify-between gap-2"
+          className="hidden md:flex retro-banner-enter bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 items-center justify-between gap-2"
         >
           <p className="text-xs text-[#3D2200] font-mono font-semibold">
             Replace your manual edit?
@@ -334,7 +372,7 @@ export function ModeResultCard({
               onClick={() => setNotesOpen((prev) => !prev)}
               aria-expanded={notesOpen}
               aria-label={`${notesOpen ? 'Hide' : 'Show'} Teach Me Notes for ${config.title}`}
-              className={`bg-transparent border-0 shadow-none min-h-[44px] px-2 text-xs font-mono font-semibold inline-flex items-center justify-center gap-1 whitespace-nowrap underline underline-offset-3 cursor-pointer ${
+              className={`bg-transparent border-0 shadow-none min-h-[44px] px-2 text-xs font-mono font-semibold inline-flex items-center justify-center gap-1 whitespace-nowrap underline underline-offset-3 transition-colors duration-150 cursor-pointer ${
                 notesOpen ? 'text-[#551A8B]' : 'text-[#0000EE]'
               }`}
             >
@@ -349,9 +387,9 @@ export function ModeResultCard({
         </div>
       )}
 
-      {/* Teach Me Notes: Always shown automatically on mobile when Teach Me is ON */}
-      {teachMe && (
-        <div className={notesOpen ? 'block' : 'block md:hidden'}>
+      {/* Smooth CSS Grid Accordion for Teach Me Notes: Automatic on mobile when Teach Me is ON */}
+      <div className={`retro-collapse ${collapseStateClass}`}>
+        <div className="retro-collapse-inner">
           <TeachMePanel
             modeTitle={config.title}
             explanations={data.explanations}
@@ -361,7 +399,7 @@ export function ModeResultCard({
             onRequestNotes={onRequestNotes}
           />
         </div>
-      )}
+      </div>
     </article>
   );
-}
+});
