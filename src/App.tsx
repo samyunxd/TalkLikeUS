@@ -19,13 +19,6 @@ import { SAMPLE_PROMPTS, trimToSafeBoundary } from './utils/textStats';
 
 type ResultsMap = Record<VoiceMode, ModeTransformation>;
 
-const STAGGER_CLASSES = [
-  'retro-stagger-1',
-  'retro-stagger-2',
-  'retro-stagger-3',
-  'retro-stagger-4',
-] as const;
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -59,10 +52,8 @@ export default function App() {
   const [submittedSourceText, setSubmittedSourceText] = useState<string>('');
   const [teachMe, setTeachMe] = useState<boolean>(true);
   const [chatModeEnabled, setChatModeEnabled] = useState<boolean>(false);
-  const [sampleFlashTrigger, setSampleFlashTrigger] = useState<number>(0);
 
   const [resultsMap, setResultsMap] = useState<ResultsMap | null>(null);
-  const [generationBatchId, setGenerationBatchId] = useState<number>(0);
   const [resultsBatchChatMode, setResultsBatchChatMode] = useState<boolean>(false);
 
   const [isTransformingAll, setIsTransformingAll] = useState<boolean>(false);
@@ -135,7 +126,6 @@ export default function App() {
 
         setSubmittedSourceText(trimmed);
         setResultsMap(buildResultsMap(res.results, chatModeOn));
-        setGenerationBatchId((prev) => prev + 1);
         setResultsBatchChatMode(chatModeOn);
         announce('All four American voices are ready.');
 
@@ -280,7 +270,6 @@ export default function App() {
   const handleLoadSampleText = useCallback(
     (sampleText: string, label?: string) => {
       setInputText(sampleText);
-      setSampleFlashTrigger((prev) => prev + 1);
       setActiveSection('home');
       if (label) {
         announce(`Loaded sample: ${label}`);
@@ -297,13 +286,13 @@ export default function App() {
   }, [handleLoadSampleText]);
 
   const handleSelectSection = useCallback((section: ActiveNavSection) => {
-    setActiveSection(section);
-    if (typeof window !== 'undefined') {
-      window.scrollTo({
-        top: 0,
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      });
-    }
+    setActiveSection((prev) => {
+      if (prev === section) return prev;
+      if (typeof window !== 'undefined' && window.scrollY > 0) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+      return section;
+    });
   }, []);
 
   const handleReturnToStudio = useCallback(() => {
@@ -312,13 +301,10 @@ export default function App() {
 
   const handleLoadSampleFromInfo = useCallback(
     (sampleText: string) => {
-      handleLoadSampleText(sampleText, 'Quick example');
-      if (typeof window !== 'undefined') {
-        window.scrollTo({
-          top: 0,
-          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-        });
+      if (typeof window !== 'undefined' && window.scrollY > 0) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
       }
+      handleLoadSampleText(sampleText, 'Quick example');
     },
     [handleLoadSampleText]
   );
@@ -361,7 +347,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-4xl mx-auto safe-area-x py-3 md:py-8 min-w-0">
         <div
           key={activeSection}
-          className="retro-view-enter space-y-3 md:space-y-6 min-w-0"
+          className="retro-view-fade space-y-3 md:space-y-6 min-w-0"
         >
           {activeSection !== 'home' ? (
             <InfoViews
@@ -391,7 +377,7 @@ export default function App() {
               {errorBanner && (
                 <div
                   role="alert"
-                  className="retro-window retro-banner-enter !bg-[#FDF0ED] !border-[#B41616] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                  className="retro-window !bg-[#FDF0ED] !border-[#B41616] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                 >
                   <div className="space-y-1 min-w-0">
                     <p className="font-mono text-xs font-bold text-[#8F1111]">
@@ -426,7 +412,6 @@ export default function App() {
               {/* Main Studio Text Editor */}
               <TextEditorWindow
                 inputText={inputText}
-                sampleFlashTrigger={sampleFlashTrigger}
                 onChangeText={setInputText}
                 onLoadSampleText={handleLoadSampleText}
                 onClearText={handleClearText}
@@ -440,20 +425,18 @@ export default function App() {
                 onTrimToLimit={handleTrimOversizedInput}
               />
 
-              {/* Instantaneous Shimmer Skeleton Preview on First Generation */}
+              {/* Calm Shimmer Preview on First Generation (zero slide/shake) */}
               {isTransformingAll && !resultsMap && (
                 <section
                   ref={resultsAnchorRef}
                   aria-label="Generating American English voices"
                   aria-busy="true"
-                  className="retro-window retro-view-enter divide-y-2 divide-[#141B29] min-w-0"
+                  className="retro-window retro-view-fade divide-y-2 divide-[#141B29] min-w-0"
                 >
-                  {ORDERED_MODE_CONFIGS.map((cfg, idx) => (
+                  {ORDERED_MODE_CONFIGS.map((cfg) => (
                     <div
                       key={cfg.id}
-                      className={`retro-card-enter ${
-                        STAGGER_CLASSES[idx] ?? 'retro-stagger-1'
-                      } px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0`}
+                      className="px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0"
                     >
                       <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                         <span
@@ -478,12 +461,12 @@ export default function App() {
                 </section>
               )}
 
-              {/* Vertical List of Four Result Cards */}
+              {/* Vertical List of Four Result Cards — Stable keys prevent DOM remount jitter */}
               {resultsMap && (
                 <section
                   ref={resultsAnchorRef}
                   aria-label="Generated American English voices"
-                  className="retro-window divide-y-2 divide-[#141B29] min-w-0"
+                  className="retro-window retro-view-fade divide-y-2 divide-[#141B29] min-w-0"
                 >
                   {showResultsStatusStrip && (
                     <div className="hidden md:flex px-5 py-2.5 bg-[#E6E2D2] items-center justify-between gap-3 font-mono text-xs min-w-0">
@@ -515,11 +498,10 @@ export default function App() {
                     </div>
                   )}
 
-                  {ORDERED_MODE_CONFIGS.map((cfg, idx) => (
+                  {ORDERED_MODE_CONFIGS.map((cfg) => (
                     <ModeResultCard
-                      key={`${cfg.id}-${generationBatchId}`}
+                      key={cfg.id}
                       config={cfg}
-                      staggerIndex={idx}
                       data={resultsMap[cfg.id]}
                       teachMe={teachMe}
                       isAnyTransformAllRunning={isTransformingAll}

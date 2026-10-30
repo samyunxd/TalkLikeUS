@@ -9,13 +9,6 @@ interface InfoViewsProps {
   onLoadSampleAndReturn: (sampleText: string) => void;
 }
 
-const STAGGER_CLASSES = [
-  'retro-stagger-1',
-  'retro-stagger-2',
-  'retro-stagger-3',
-  'retro-stagger-4',
-] as const;
-
 export const InfoViews = memo(function InfoViews({
   section,
   onReturnToStudio,
@@ -50,7 +43,7 @@ export const InfoViews = memo(function InfoViews({
           </div>
 
           <ol className="space-y-4 border-t border-b border-dashed border-[#ABA48E] py-5">
-            <li className="space-y-1 retro-card-enter retro-stagger-1">
+            <li className="space-y-1">
               <p className="font-mono text-sm font-semibold text-[#142850]">
                 Step 01. Drop Your Text &amp; Choose Standard or Chat Mode
               </p>
@@ -61,7 +54,7 @@ export const InfoViews = memo(function InfoViews({
                 &ldquo;lmk&rdquo;, and &ldquo;rn&rdquo; where appropriate).
               </p>
             </li>
-            <li className="space-y-1 retro-card-enter retro-stagger-2">
+            <li className="space-y-1">
               <p className="font-mono text-sm font-semibold text-[#142850]">
                 Step 02. Scan All Four Voices Top to Bottom
               </p>
@@ -71,7 +64,7 @@ export const InfoViews = memo(function InfoViews({
                 card.
               </p>
             </li>
-            <li className="space-y-1 retro-card-enter retro-stagger-3">
+            <li className="space-y-1">
               <p className="font-mono text-sm font-semibold text-[#142850]">
                 Step 03. Click Any Voice Well to Copy Instantly
               </p>
@@ -131,12 +124,10 @@ export const InfoViews = memo(function InfoViews({
           </p>
 
           <div className="space-y-3">
-            {ORDERED_MODE_CONFIGS.map((cfg, idx) => (
+            {ORDERED_MODE_CONFIGS.map((cfg) => (
               <div
                 key={cfg.id}
-                className={`retro-card-enter ${
-                  STAGGER_CLASSES[idx] ?? 'retro-stagger-1'
-                } bg-[#ECE8D9] border-2 border-[#141B29] p-3.5 sm:p-4 space-y-1.5`}
+                className="bg-[#ECE8D9] border-2 border-[#141B29] p-3.5 sm:p-4 space-y-1.5"
               >
                 <div className="flex items-center gap-2">
                   <div className={`${cfg.headerBgClass} p-1 border border-[#141B29] shrink-0`}>
@@ -199,7 +190,7 @@ export const InfoViews = memo(function InfoViews({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 border-t border-b border-dashed border-[#ABA48E] py-5">
-          <div className="space-y-2 retro-card-enter retro-stagger-1">
+          <div className="space-y-2">
             <h4 className="font-mono text-sm font-semibold text-[#142850]">
               Meaning-First Guarantee
             </h4>
@@ -211,7 +202,7 @@ export const InfoViews = memo(function InfoViews({
             </ul>
           </div>
 
-          <div className="space-y-2 retro-card-enter retro-stagger-2">
+          <div className="space-y-2">
             <h4 className="font-mono text-sm font-semibold text-[#142850]">
               Session-Only Privacy
             </h4>

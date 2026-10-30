@@ -7,7 +7,6 @@ import { TeachMePanel } from './TeachMePanel';
 
 interface ModeResultCardProps {
   config: ModeConfig;
-  staggerIndex: number;
   data: ModeTransformation;
   teachMe: boolean;
   isAnyTransformAllRunning: boolean;
@@ -15,16 +14,8 @@ interface ModeResultCardProps {
   onAnnounce: (msg: string) => void;
 }
 
-const STAGGER_CLASSES = [
-  'retro-stagger-1',
-  'retro-stagger-2',
-  'retro-stagger-3',
-  'retro-stagger-4',
-] as const;
-
 export const ModeResultCard = memo(function ModeResultCard({
   config,
-  staggerIndex,
   data,
   teachMe,
   isAnyTransformAllRunning,
@@ -71,14 +62,12 @@ export const ModeResultCard = memo(function ModeResultCard({
         ? 'retro-collapse-desktop-only'
         : '';
 
-  const staggerClass = STAGGER_CLASSES[staggerIndex] ?? 'retro-stagger-1';
-
   return (
     <article
       aria-labelledby={`mode-heading-${config.id}`}
-      className={`retro-result-card retro-card-enter ${staggerClass} px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0`}
+      className="retro-result-card px-3 min-[375px]:px-3.5 py-3 md:px-5 md:py-4 bg-[#F4F1E6] space-y-2 min-w-0"
     >
-      {/* Clean Single-Line Card Title + Copy Affordance Cue */}
+      {/* Clean Single-Line Card Title + Grounded Copy Cue */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <span
@@ -102,31 +91,7 @@ export const ModeResultCard = memo(function ModeResultCard({
         {copyStatus === 'idle' && !isAnyTransformAllRunning && (
           <span
             aria-hidden="true"
-            className="retro-copy-idle-hint inline-flex items-center gap-1 font-mono text-[11px] text-[#4A4538] whitespace-nowrap shrink-0 select-none"
-          >
-            <PixelCopyIcon className="w-3 h-3 shrink-0" />
-            <span className="md:hidden">Tap to copy</span>
-            <span className="hidden md:inline">Click to copy</span>
-          </span>
-        )}
-
-        {copyStatus === 'failed' && (
-          <span
-            role="status"
-            aria-live="polite"
-            className="retro-pop-in font-mono text-[11px] font-semibold text-[#B41616] whitespace-nowrap shrink-0"
-          >
-            Select text to copy
-          </span>
-        )}
-      </div>
-
-      {/* Interactive Output Text Well — Click, Tap, or Enter/Space to Copy */}
-      <div className="retro-well-wrap relative min-w-0">
-        {copyStatus === 'idle' && !isAnyTransformAllRunning && (
-          <span
-            aria-hidden="true"
-            className="retro-copy-hover-tip absolute -top-3 right-2.5 md:right-3 z-10 inline-flex items-center gap-1 bg-[#FFFDE4] text-[#141B29] border border-[#141B29] shadow-[2px_2px_0_#141B29] px-2 py-0.5 font-mono text-[11px] font-semibold whitespace-nowrap select-none"
+            className="retro-copy-cue inline-flex items-center gap-1 font-mono text-[11px] whitespace-nowrap shrink-0 select-none"
           >
             <PixelCopyIcon className="w-3 h-3 shrink-0" />
             <span className="md:hidden">Tap to copy</span>
@@ -138,43 +103,54 @@ export const ModeResultCard = memo(function ModeResultCard({
           <span
             role="status"
             aria-live="polite"
-            className="retro-pop-in pointer-events-none absolute -top-3 right-2.5 md:right-3 z-10 inline-flex items-center gap-1 bg-[#E6F7EC] text-[#15603A] border border-[#15603A] shadow-[2px_2px_0_#141B29] px-2 py-0.5 font-mono text-[11px] font-bold whitespace-nowrap select-none"
+            className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-[#15603A] whitespace-nowrap shrink-0 select-none"
           >
             <PixelCheckIcon className="w-3 h-3 shrink-0" />
             <span>COPIED!</span>
           </span>
         )}
 
-        <div
-          ref={fallbackSelectRef}
-          role={copyStatus === 'failed' ? undefined : 'button'}
-          tabIndex={copyStatus === 'failed' ? undefined : 0}
-          aria-label={copyStatus === 'failed' ? undefined : `Copy ${config.title} text`}
-          onClick={() => {
-            if (copyStatus !== 'failed') {
-              void handleCopy();
-            }
-          }}
-          onKeyDown={(e) => {
-            if (copyStatus !== 'failed' && (e.key === 'Enter' || e.key === ' ')) {
-              e.preventDefault();
-              void handleCopy();
-            }
-          }}
-          className={`retro-well retro-well-copyable w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 min-w-0 ${
-            isAnyTransformAllRunning ? 'retro-shimmer-surface opacity-75 ' : ''
-          }${
-            copyStatus === 'copied'
-              ? '!bg-[#E6F7EC] !border-[#15603A] cursor-pointer'
-              : copyStatus === 'failed'
-                ? '!bg-[#FFF8DE] !border-[#6B3A00] select-all cursor-text'
-                : 'active:bg-[#EFECE0] cursor-pointer'
-          }`}
-        >
-          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
-            {data.text}
-          </p>
-        </div>
+        {copyStatus === 'failed' && (
+          <span
+            role="status"
+            aria-live="polite"
+            className="font-mono text-[11px] font-semibold text-[#B41616] whitespace-nowrap shrink-0"
+          >
+            Select text to copy
+          </span>
+        )}
+      </div>
+
+      {/* Interactive Output Text Well — Click, Tap, or Enter/Space to Copy (zero lift/shake) */}
+      <div
+        ref={fallbackSelectRef}
+        role={copyStatus === 'failed' ? undefined : 'button'}
+        tabIndex={copyStatus === 'failed' ? undefined : 0}
+        aria-label={copyStatus === 'failed' ? undefined : `Copy ${config.title} text`}
+        onClick={() => {
+          if (copyStatus !== 'failed') {
+            void handleCopy();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (copyStatus !== 'failed' && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            void handleCopy();
+          }
+        }}
+        className={`retro-well retro-well-copyable w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 min-w-0 ${
+          isAnyTransformAllRunning ? 'retro-shimmer-surface opacity-80 ' : ''
+        }${
+          copyStatus === 'copied'
+            ? '!bg-[#EAF5EE] !border-[#15603A] cursor-pointer'
+            : copyStatus === 'failed'
+              ? '!bg-[#FFF8DE] !border-[#6B3A00] select-all cursor-text'
+              : 'cursor-pointer'
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
+          {data.text}
+        </p>
       </div>
 
       {/* Smooth CSS Grid Accordion for Teach Me Notes: Shown automatically when Teach Me is ON */}

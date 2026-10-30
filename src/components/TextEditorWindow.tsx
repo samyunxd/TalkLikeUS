@@ -1,11 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { MAX_INPUT_CHARS } from '../config/modes';
 import { SAMPLE_PROMPTS, getTextMetrics } from '../utils/textStats';
 import { PixelBookIcon, PixelChatModeIcon, PixelSpinnerIcon } from './PixelIcons';
 
 interface TextEditorWindowProps {
   inputText: string;
-  sampleFlashTrigger: number;
   onChangeText: (next: string) => void;
   onLoadSampleText: (sampleText: string) => void;
   onClearText: () => void;
@@ -21,7 +20,6 @@ interface TextEditorWindowProps {
 
 export const TextEditorWindow = memo(function TextEditorWindow({
   inputText,
-  sampleFlashTrigger,
   onChangeText,
   onLoadSampleText,
   onClearText,
@@ -42,15 +40,6 @@ export const TextEditorWindow = memo(function TextEditorWindow({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const prevLenRef = useRef<number>(inputText.length);
   const lastHeightRef = useRef<number>(0);
-
-  const [isSampleFlashing, setIsSampleFlashing] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (sampleFlashTrigger === 0) return;
-    setIsSampleFlashing(true);
-    const timer = window.setTimeout(() => setIsSampleFlashing(false), 240);
-    return () => window.clearTimeout(timer);
-  }, [sampleFlashTrigger]);
 
   const adjustTextareaHeight = useCallback((forceRecalc = false) => {
     const el = textareaRef.current;
@@ -121,7 +110,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
         <div className="flex items-center gap-2 shrink-0">
           <div className="font-mono text-[11px] sm:text-xs text-[#DCE4F5] tabular-nums whitespace-nowrap">
             {metrics.words > 0 && (
-              <span className="md:hidden retro-pop-in inline-block">
+              <span className="md:hidden inline-block">
                 {metrics.words.toLocaleString()}w
               </span>
             )}
@@ -137,7 +126,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
               type="button"
               onClick={onClearText}
               aria-label="Clear Text"
-              className="md:hidden retro-pop-in min-h-[44px] min-w-[44px] px-2 -mr-2 inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[#FDE047] underline underline-offset-2 touch-manipulation cursor-pointer"
+              className="md:hidden min-h-[44px] min-w-[44px] px-2 -mr-2 inline-flex items-center justify-center font-mono text-[11px] font-semibold text-[#FDE047] underline underline-offset-2 touch-manipulation cursor-pointer"
             >
               Clear
             </button>
@@ -172,11 +161,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
         </div>
 
         {/* Auto-expanding Sunken Document Textarea (16px font prevents iOS zoom jump) */}
-        <div
-          className={`retro-well retro-well-input min-w-0 ${
-            isSampleFlashing ? 'retro-sample-enter' : ''
-          }`}
-        >
+        <div className="retro-well retro-well-input min-w-0">
           <textarea
             ref={textareaRef}
             id="studio-original-textarea"
@@ -203,7 +188,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
         {metrics.isOverLimit && (
           <div
             role="alert"
-            className="retro-banner-enter bg-[#FDF0ED] border-2 border-[#B41616] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+            className="bg-[#FDF0ED] border-2 border-[#B41616] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
           >
             <p className="text-xs sm:text-sm text-[#6E0D0D] leading-relaxed break-words">
               <strong className="font-mono font-semibold">Limit Exceeded: </strong>
@@ -221,7 +206,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
 
         {/* Long multi-chunk notice (concise) */}
         {metrics.isLongChunked && !metrics.isOverLimit && (
-          <p className="retro-banner-enter font-mono text-[11px] sm:text-xs text-[#142850] bg-[#E5EAF5] border border-[#142850] px-2.5 py-1.5 break-words">
+          <p className="font-mono text-[11px] sm:text-xs text-[#142850] bg-[#E5EAF5] border border-[#142850] px-2.5 py-1.5 break-words">
             <span className="md:hidden">Long text ({metrics.words.toLocaleString()}w)</span>
             <span className="hidden md:inline">
               Long-form ({metrics.words.toLocaleString()}w): splits cleanly by paragraph without summarizing.
@@ -229,7 +214,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
           </p>
         )}
 
-        {/* Clean 2-Row Mobile Controls / Single-Line Desktop Toolbar */}
+        {/* Clean 2-Row Mobile Controls / Single-Line Desktop Toolbar — Fixed ON/OFF slots prevent width shifts */}
         <div className="grid grid-cols-2 md:flex md:flex-nowrap md:items-center gap-2 md:gap-2.5 sm:pt-2 sm:border-t sm:border-dashed sm:border-[#ABA48E]">
           {/* 1. Teach Me Toggle */}
           <button
@@ -248,7 +233,10 @@ export const TextEditorWindow = memo(function TextEditorWindow({
               {teachMe ? '[X]' : '[ ]'}
             </span>
             <PixelBookIcon className="hidden min-[365px]:block w-3.5 h-3.5 shrink-0" />
-            <span>TEACH ME: {teachMe ? 'ON' : 'OFF'}</span>
+            <span>
+              TEACH ME:{' '}
+              <span className="inline-block w-[3ch] text-left">{teachMe ? 'ON' : 'OFF'}</span>
+            </span>
           </button>
 
           {/* 2. Universal Chat Mode Toggle */}
@@ -272,7 +260,12 @@ export const TextEditorWindow = memo(function TextEditorWindow({
               {chatModeEnabled ? '[X]' : '[ ]'}
             </span>
             <PixelChatModeIcon className="hidden min-[365px]:block w-3.5 h-3.5 shrink-0" />
-            <span>CHAT MODE: {chatModeEnabled ? 'ON' : 'OFF'}</span>
+            <span>
+              CHAT MODE:{' '}
+              <span className="inline-block w-[3ch] text-left">
+                {chatModeEnabled ? 'ON' : 'OFF'}
+              </span>
+            </span>
           </button>
 
           {/* 3. Desktop Clear Text button (mobile Clear lives cleanly in the title bar when text exists) */}
@@ -286,7 +279,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
             Clear Text
           </button>
 
-          {/* 4. Primary Action Button with Retro Loading Animation */}
+          {/* 4. Primary Action Button with Calm Loading Indicator */}
           <button
             type="button"
             onClick={onSubmitTransform}
@@ -294,7 +287,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
             aria-busy={isTransformingAll}
             className={`retro-btn-primary ${
               isTransformingAll ? 'retro-btn-loading' : ''
-            } col-span-2 md:ml-auto min-h-[46px] md:min-h-[44px] md:h-11 w-full md:w-auto px-3.5 lg:px-5 inline-flex items-center justify-center gap-2.5 text-xs lg:text-sm leading-none font-bold tracking-wide whitespace-nowrap shrink-0`}
+            } col-span-2 md:ml-auto min-h-[46px] md:min-h-[44px] md:h-11 w-full md:w-auto md:min-w-[208px] px-3.5 lg:px-5 inline-flex items-center justify-center gap-2.5 text-xs lg:text-sm leading-none font-bold tracking-wide whitespace-nowrap shrink-0`}
           >
             {isTransformingAll ? (
               <>
@@ -314,7 +307,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
 
         {/* Helper & Live Counter Footer — Desktop only so mobile stays crisp & uncluttered */}
         <div className="hidden md:flex flex-wrap items-center justify-between gap-2 text-xs text-[#4B4639]">
-          <p className="leading-relaxed transition-opacity duration-150">
+          <p className="leading-relaxed">
             {chatModeEnabled
               ? 'Chat Mode ON: compresses your message into short, real American texts.'
               : 'Preserves your exact meaning across four American voices.'}

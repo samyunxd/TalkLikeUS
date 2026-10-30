@@ -12,6 +12,7 @@
     background-color: #eae6d7;
     color: #141b29;
     overflow-x: clip;
+    scrollbar-gutter: stable;
     -webkit-text-size-adjust: 100%;
   }
 
@@ -63,7 +64,7 @@
   }
 }
 
-/* Classic 1990s Desktop / Early Web Window Frame */
+/* Classic 1990s Desktop / Early Web Window Frame — Heavy, Planted Slab */
 .retro-window {
   background-color: #f4f1e6;
   border: 2px solid #141b29;
@@ -82,7 +83,7 @@
   }
 }
 
-/* Recessed white document text well */
+/* Recessed white document text well — Zero positional shift, smooth ink & paper transition */
 .retro-well {
   background-color: #ffffff;
   border: 2px solid #141b29;
@@ -90,74 +91,47 @@
     inset 2px 2px 0 #cdc7b4,
     inset -1px -1px 0 #f8f6ef;
   transition:
-    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 130ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    background-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .retro-well-input:focus-within {
   border-color: #142850;
   box-shadow:
     inset 2px 2px 0 #b8c7e6,
-    inset -1px -1px 0 #f8f6ef,
-    0 0 0 1px #142850;
+    inset -1px -1px 0 #f8f6ef;
 }
 
 @media (hover: hover) {
   .retro-well-copyable:hover {
     background-color: #faf8f1;
     border-color: #142850;
-    transform: translateY(-1px);
-    box-shadow:
-      inset 2px 2px 0 #b8c7e6,
-      inset -1px -1px 0 #f8f6ef,
-      2px 2px 0 #142850;
   }
 }
 
 .retro-well-copyable:active {
-  transform: translateY(0) scale(0.996);
+  background-color: #f0ede1;
 }
 
-/* Result Copy Affordance — Quiet inline cue + 1990s floating hover InfoTip */
-.retro-copy-idle-hint {
-  transition:
-    opacity 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 140ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.retro-copy-hover-tip {
-  opacity: 0;
-  transform: translateY(3px);
-  transition:
-    opacity 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
+/* Result Copy Affordance — Grounded inline cue, smooth ink shift on hover/focus */
+.retro-copy-cue {
+  color: #5c5647;
+  transition: color 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (hover: hover) {
-  .retro-result-card:has(.retro-well-wrap:hover) .retro-copy-idle-hint {
-    opacity: 0;
-  }
-
-  .retro-well-wrap:hover .retro-copy-hover-tip {
-    opacity: 1;
-    transform: translateY(0);
+  .retro-result-card:hover .retro-copy-cue {
+    color: #142850;
   }
 }
 
-.retro-result-card:has(.retro-well-copyable:focus-visible) .retro-copy-idle-hint {
-  opacity: 0;
+.retro-result-card:has(.retro-well-copyable:focus-visible) .retro-copy-cue {
+  color: #142850;
 }
 
-.retro-well-wrap:has(.retro-well-copyable:focus-visible) .retro-copy-hover-tip {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* Tactile 1990s raised button — crisp keycap hover & press physics */
+/* Heavy, Planted 1990s Button — Zero coordinate movement, damped bevel & surface response */
 .retro-btn {
   font-family: var(--font-mono);
   background-color: #e5e0d0;
@@ -168,12 +142,11 @@
     inset -2px -2px 0 #aba48e,
     2px 2px 0 #141b29;
   transition:
-    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 140ms ease;
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -182,21 +155,16 @@
 
 @media (hover: hover) {
   .retro-btn:hover:not(:disabled) {
-    background-color: #efeadd;
-    transform: translate(-1px, -1px);
-    box-shadow:
-      inset 1px 1px 0 #ffffff,
-      inset -2px -2px 0 #aba48e,
-      3px 3px 0 #141b29;
+    background-color: #ece8da;
   }
 }
 
 .retro-btn:active:not(:disabled) {
-  transform: translate(1px, 1px);
+  background-color: #dad4c2;
   box-shadow:
-    inset 2px 2px 0 #aba48e,
+    inset 2px 2px 0 #9e9781,
     inset -1px -1px 0 #ffffff,
-    1px 1px 0 #141b29;
+    2px 2px 0 #141b29;
 }
 
 .retro-btn:disabled {
@@ -204,7 +172,7 @@
   cursor: not-allowed;
 }
 
-/* Primary Action CTA ("AMERICANIZE IT!") */
+/* Primary Action CTA ("AMERICANIZE IT!") — Heavy, Planted Press */
 .retro-btn-primary {
   font-family: var(--font-pixel);
   background-color: #d92323;
@@ -215,10 +183,9 @@
     inset -2px -2px 0 #8f1111,
     2px 2px 0 #141b29;
   transition:
-    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 140ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 140ms ease;
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -227,21 +194,16 @@
 
 @media (hover: hover) {
   .retro-btn-primary:hover:not(:disabled) {
-    background-color: #c21b1b;
-    transform: translate(-1px, -1px);
-    box-shadow:
-      inset 2px 2px 0 #ff7575,
-      inset -2px -2px 0 #8f1111,
-      3px 3px 0 #141b29;
+    background-color: #c41e1e;
   }
 }
 
 .retro-btn-primary:active:not(:disabled) {
-  transform: translate(1px, 1px);
+  background-color: #ad1818;
   box-shadow:
-    inset 2px 2px 0 #8f1111,
+    inset 2px 2px 0 #7d0f0f,
     inset -1px -1px 0 #ff7575,
-    1px 1px 0 #141b29;
+    2px 2px 0 #141b29;
 }
 
 .retro-btn-primary:disabled {
@@ -251,7 +213,7 @@
 
 .retro-btn-primary.retro-btn-loading:disabled {
   opacity: 1;
-  background-color: #c21b1b;
+  background-color: #c41e1e;
   cursor: wait;
 }
 
@@ -298,16 +260,10 @@ textarea::-webkit-scrollbar {
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: #1f3f7a;
-  box-shadow:
-    inset 1px 1px 0 #6d92c9,
-    inset -1px -1px 0 #0f1f3d;
 }
 
 ::-webkit-scrollbar-thumb:active {
   background-color: #d92323;
-  box-shadow:
-    inset 1px 1px 0 #ff7575,
-    inset -1px -1px 0 #8f1111;
 }
 
 ::-webkit-scrollbar-corner {
@@ -322,12 +278,13 @@ textarea::-webkit-scrollbar {
   }
 }
 
-/* Classic Internet Hyperlink */
+/* Classic Internet Hyperlink — Zero layout shift between normal & active states */
 .retro-link {
   color: #0000ee;
   text-decoration: underline;
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  transition: color 130ms ease, opacity 130ms ease;
+  transition: color 200ms cubic-bezier(0.22, 1, 0.36, 1);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -335,7 +292,7 @@ textarea::-webkit-scrollbar {
 
 @media (hover: hover) {
   .retro-link:hover {
-    color: #551a8b;
+    color: #142850;
   }
 }
 
@@ -344,64 +301,18 @@ textarea::-webkit-scrollbar {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
-  transition: color 130ms ease;
+  transition: color 200ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Compositor-Only Smooth Entrance, Shimmer & Feedback Animations */
-@keyframes retro-view-in {
+/* Weighted, Zero-Displacement Opacity Transitions & Loading Indicators */
+@keyframes retro-steady-fade {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes retro-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes retro-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes retro-banner-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes retro-sample-flash {
-  0% {
-    opacity: 0.65;
-    transform: translateY(2px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -423,66 +334,18 @@ textarea::-webkit-scrollbar {
   }
 }
 
-@keyframes retro-hourglass-flip {
-  0%,
-  42% {
-    transform: rotate(0deg);
-  }
-  50%,
-  92% {
-    transform: rotate(180deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes retro-block-pulse {
   0%,
   100% {
-    transform: scaleY(0.55);
-    opacity: 0.45;
+    opacity: 0.35;
   }
   50% {
-    transform: scaleY(1.25);
     opacity: 1;
   }
 }
 
-.retro-view-enter {
-  animation: retro-view-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.retro-card-enter {
-  animation: retro-card-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.retro-stagger-1 {
-  animation-delay: 0ms;
-}
-
-.retro-stagger-2 {
-  animation-delay: 45ms;
-}
-
-.retro-stagger-3 {
-  animation-delay: 90ms;
-}
-
-.retro-stagger-4 {
-  animation-delay: 135ms;
-}
-
-.retro-pop-in {
-  animation: retro-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.retro-banner-enter {
-  animation: retro-banner-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.retro-sample-enter {
-  animation: retro-sample-flash 220ms cubic-bezier(0.16, 1, 0.3, 1);
+.retro-view-fade {
+  animation: retro-steady-fade 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .retro-shimmer-surface {
@@ -497,37 +360,33 @@ textarea::-webkit-scrollbar {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(20, 40, 80, 0.08) 50%,
+    rgba(20, 40, 80, 0.06) 50%,
     transparent 100%
   );
-  animation: retro-shimmer-sweep 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: retro-shimmer-sweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
 }
 
 .retro-spin-steps {
-  animation: retro-pixel-spin 0.72s steps(8, end) infinite;
-}
-
-.retro-hourglass-spin {
-  animation: retro-hourglass-flip 1.25s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: retro-pixel-spin 0.9s steps(8, end) infinite;
 }
 
 .retro-loader-block-1 {
-  animation: retro-block-pulse 0.75s ease-in-out infinite;
+  animation: retro-block-pulse 0.9s ease-in-out infinite;
   animation-delay: 0ms;
 }
 
 .retro-loader-block-2 {
-  animation: retro-block-pulse 0.75s ease-in-out infinite;
-  animation-delay: 150ms;
+  animation: retro-block-pulse 0.9s ease-in-out infinite;
+  animation-delay: 180ms;
 }
 
 .retro-loader-block-3 {
-  animation: retro-block-pulse 0.75s ease-in-out infinite;
-  animation-delay: 300ms;
+  animation: retro-block-pulse 0.9s ease-in-out infinite;
+  animation-delay: 360ms;
 }
 
-/* Smooth CSS Grid Accordion for Teach Me Notes */
+/* Heavy, Smooth CSS Grid Accordion for Teach Me Notes */
 .retro-collapse {
   display: grid;
   grid-template-rows: 0fr;
@@ -535,10 +394,10 @@ textarea::-webkit-scrollbar {
   margin-top: 0 !important;
   visibility: hidden;
   transition:
-    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
-    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 0s linear 240ms;
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 280ms;
 }
 
 .retro-collapse-inner {
@@ -552,9 +411,9 @@ textarea::-webkit-scrollbar {
   margin-top: 0.5rem !important;
   visibility: visible;
   transition:
-    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
-    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 280ms cubic-bezier(0.22, 1, 0.36, 1),
     visibility 0s linear 0s;
 }
 
@@ -564,9 +423,9 @@ textarea::-webkit-scrollbar {
   margin-top: 0.5rem !important;
   visibility: visible;
   transition:
-    grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
-    margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 280ms cubic-bezier(0.22, 1, 0.36, 1),
     visibility 0s linear 0s;
 }
 
@@ -577,10 +436,10 @@ textarea::-webkit-scrollbar {
     margin-top: 0 !important;
     visibility: hidden;
     transition:
-      grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
-      margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
-      visibility 0s linear 240ms;
+      grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin-top 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s linear 280ms;
   }
 
   .retro-collapse-desktop-only {
@@ -589,9 +448,9 @@ textarea::-webkit-scrollbar {
     margin-top: 0.5rem !important;
     visibility: visible;
     transition:
-      grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
-      margin-top 240ms cubic-bezier(0.16, 1, 0.3, 1),
+      grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin-top 280ms cubic-bezier(0.22, 1, 0.36, 1),
       visibility 0s linear 0s;
   }
 }

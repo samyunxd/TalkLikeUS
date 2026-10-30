@@ -23,7 +23,7 @@ export const RetroHeader = memo(function RetroHeader({
 }: RetroHeaderProps) {
   return (
     <header className="w-full bg-[#F4F1E6] border-b-2 border-[#141B29]">
-      <div className="max-w-4xl mx-auto safe-area-x py-1.5 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-8">
+      <div className="max-w-4xl mx-auto safe-area-x py-1.5 sm:py-2.5 flex items-center justify-between gap-2 md:grid md:grid-cols-[1fr_auto_1fr] md:gap-8">
         {/* Zone 1: Exact Mixed-Case Brand Wordmark "TalkLikeUS" */}
         <a
           href="#studio"
@@ -31,14 +31,17 @@ export const RetroHeader = memo(function RetroHeader({
             e.preventDefault();
             onSelectSection('home');
           }}
-          className="group min-h-[44px] inline-flex items-center gap-2 sm:gap-2.5 font-mono text-lg sm:text-2xl font-bold tracking-tight text-[#142850] hover:text-[#0000EE] transition-colors duration-150 whitespace-nowrap shrink-0"
+          className="md:justify-self-start min-h-[44px] inline-flex items-center gap-2 sm:gap-2.5 font-mono text-lg sm:text-2xl font-bold tracking-tight text-[#142850] hover:text-[#1D3B73] transition-colors duration-200 whitespace-nowrap shrink-0"
         >
-          <PixelFlagStamp className="w-6 h-4 sm:w-7 sm:h-5 shrink-0 transition-transform duration-150 group-hover:-translate-y-0.5" />
+          <PixelFlagStamp className="w-6 h-4 sm:w-7 sm:h-5 shrink-0" />
           <span>TalkLikeUS</span>
         </a>
 
-        {/* Zone 2: Clean single-line hypertext navigation links (Desktop only — keeps mobile top bar ultra-clean) */}
-        <nav aria-label="Main navigation" className="hidden md:flex items-center gap-6 font-mono text-sm">
+        {/* Zone 2: Clean single-line hypertext navigation links — locked to center on desktop */}
+        <nav
+          aria-label="Main navigation"
+          className="hidden md:flex md:justify-self-center items-center gap-6 font-mono text-sm"
+        >
           {NAV_ITEMS.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -50,8 +53,8 @@ export const RetroHeader = memo(function RetroHeader({
                   onSelectSection(item.id);
                 }}
                 aria-current={isActive ? 'page' : undefined}
-                className={`min-h-[44px] inline-flex items-center whitespace-nowrap shrink-0 ${
-                  isActive ? 'retro-link-active font-semibold' : 'retro-link'
+                className={`min-h-[44px] inline-flex items-center font-medium whitespace-nowrap shrink-0 ${
+                  isActive ? 'retro-link-active' : 'retro-link'
                 }`}
               >
                 {item.label}
@@ -60,13 +63,13 @@ export const RetroHeader = memo(function RetroHeader({
           })}
         </nav>
 
-        {/* Zone 3: Single compact primary header action */}
-        <div className="flex items-center shrink-0">
+        {/* Zone 3: Single compact primary header action — stable width prevents horizontal jitter */}
+        <div className="flex items-center md:justify-self-end shrink-0">
           {activeSection !== 'home' ? (
             <button
               type="button"
               onClick={() => onSelectSection('home')}
-              className="retro-btn min-h-[44px] min-w-[44px] px-3 sm:px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap shrink-0"
+              className="retro-btn min-h-[44px] min-w-[76px] md:min-w-[104px] px-3 sm:px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap shrink-0"
             >
               Studio
             </button>
@@ -75,7 +78,7 @@ export const RetroHeader = memo(function RetroHeader({
               type="button"
               onClick={onCycleSample}
               aria-label="Try Sample"
-              className="retro-btn min-h-[44px] min-w-[44px] px-3 sm:px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap shrink-0"
+              className="retro-btn min-h-[44px] min-w-[76px] md:min-w-[104px] px-3 sm:px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap shrink-0"
             >
               <span className="md:hidden">Sample</span>
               <span className="hidden md:inline">Try Sample</span>
