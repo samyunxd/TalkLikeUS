@@ -17,9 +17,6 @@ interface TextEditorWindowProps {
   isAnyBusy: boolean;
   onSubmitTransform: () => void;
   onTrimToLimit: () => void;
-  pendingReplaceAllConfirm: boolean;
-  onConfirmReplaceAll: () => void;
-  onCancelReplaceAll: () => void;
 }
 
 export const TextEditorWindow = memo(function TextEditorWindow({
@@ -36,9 +33,6 @@ export const TextEditorWindow = memo(function TextEditorWindow({
   isAnyBusy,
   onSubmitTransform,
   onTrimToLimit,
-  pendingReplaceAllConfirm,
-  onConfirmReplaceAll,
-  onCancelReplaceAll,
 }: TextEditorWindowProps) {
   const metrics = useMemo(() => getTextMetrics(inputText), [inputText]);
   const canSubmit =
@@ -233,35 +227,6 @@ export const TextEditorWindow = memo(function TextEditorWindow({
               Long-form ({metrics.words.toLocaleString()}w): splits cleanly by paragraph without summarizing.
             </span>
           </p>
-        )}
-
-        {/* Inline confirmation if user re-runs Americanize It while manual card edits exist */}
-        {pendingReplaceAllConfirm && (
-          <div
-            role="region"
-            aria-label="Confirm replacing edited results"
-            className="retro-banner-enter bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-          >
-            <p className="text-xs sm:text-sm text-[#3D2200] leading-relaxed">
-              <strong className="font-mono font-semibold">Replace your manual edits?</strong>
-            </p>
-            <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={onConfirmReplaceAll}
-                className="retro-btn-primary min-h-[44px] px-3.5 text-xs font-bold inline-flex items-center justify-center whitespace-nowrap"
-              >
-                Replace All
-              </button>
-              <button
-                type="button"
-                onClick={onCancelReplaceAll}
-                className="retro-btn min-h-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-              >
-                Keep My Edits
-              </button>
-            </div>
-          </div>
         )}
 
         {/* Clean 2-Row Mobile Controls / Single-Line Desktop Toolbar */}

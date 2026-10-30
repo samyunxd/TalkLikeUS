@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import type { ModeConfig } from '../config/modes';
-import type { ModeTransformation, VoiceMode } from '../types/transform';
+import type { ModeTransformation } from '../types/transform';
 import { copyTextToClipboard } from '../utils/clipboard';
-import { PixelBookIcon, PixelHourglassIcon, PixelModeIcon } from './PixelIcons';
+import { PixelModeIcon } from './PixelIcons';
 import { TeachMePanel } from './TeachMePanel';
 
 interface ModeResultCardProps {
@@ -10,13 +10,8 @@ interface ModeResultCardProps {
   staggerIndex: number;
   data: ModeTransformation;
   teachMe: boolean;
-  isRegenerating: boolean;
   isAnyTransformAllRunning: boolean;
   isLoadingNotes: boolean;
-  onUpdateModeText: (mode: VoiceMode, nextText: string) => void;
-  onResetModeEdit: (mode: VoiceMode) => void;
-  onRegenerateMode: (mode: VoiceMode) => void;
-  onRequestNotes: () => void;
   onAnnounce: (msg: string) => void;
 }
 
@@ -32,69 +27,15 @@ export const ModeResultCard = memo(function ModeResultCard({
   staggerIndex,
   data,
   teachMe,
-  isRegenerating,
   isAnyTransformAllRunning,
   isLoadingNotes,
-  onUpdateModeText,
-  onResetModeEdit,
-  onRegenerateMode,
-  onRequestNotes,
   onAnnounce,
 }: ModeResultCardProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [confirmingReplace, setConfirmingReplace] = useState<boolean>(false);
-  // Desktop toggle state; on mobile (<768px) Teach Me notes always show automatically when teachMe is ON
-  const [notesOpen, setNotesOpen] = useState<boolean>(true);
-  const [regenAnimKey, setRegenAnimKey] = useState<number>(0);
-
-  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fallbackSelectRef = useRef<HTMLDivElement | null>(null);
-  const wasRegeneratingRef = useRef<boolean>(false);
-
-  const syncEditHeight = useCallback(() => {
-    const el = editTextareaRef.current;
-    if (!el || typeof window === 'undefined') return;
-    el.style.height = 'auto';
-    const nextH = Math.min(Math.max(el.scrollHeight, 100), 340);
-    el.style.height = `${nextH}px`;
-    el.style.overflowY = el.scrollHeight > nextH ? 'auto' : 'hidden';
-  }, []);
-
-  useLayoutEffect(() => {
-    if (isEditing) {
-      syncEditHeight();
-    }
-  }, [isEditing, data.text, syncEditHeight]);
-
-  useEffect(() => {
-    if (isRegenerating) {
-      wasRegeneratingRef.current = true;
-      setConfirmingReplace(false);
-      setIsEditing(false);
-    } else if (wasRegeneratingRef.current) {
-      wasRegeneratingRef.current = false;
-      setRegenAnimKey((prev) => prev + 1);
-    }
-  }, [isRegenerating]);
-
-  // Ensure mobile view never stays trapped in desktop inline-edit state when resizing
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const handleViewport = () => {
-      if (mq.matches) {
-        setIsEditing(false);
-        setConfirmingReplace(false);
-      }
-    };
-    handleViewport();
-    mq.addEventListener('change', handleViewport);
-    return () => mq.removeEventListener('change', handleViewport);
-  }, []);
 
   const handleCopy = async () => {
-    if (isRegenerating || !data.text.trim()) return;
+    if (!data.text.trim()) return;
     const res = await copyTextToClipboard(data.text);
     if (res.ok) {
       setCopyStatus('copied');
@@ -113,58 +54,21 @@ export const ModeResultCard = memo(function ModeResultCard({
           // Ignore selection errors
         }
       }
-      onAnnounce('Automatic clipboard blocked. Text selected—tap Copy on your screen.');
+      onAnnounce('Automatic clipboard blocked. Text selected—press Copy on your device.');
       window.setTimeout(() => setCopyStatus('idle'), 3500);
     }
   };
 
-  const handleToggleEdit = () => {
-    if (isRegenerating || isAnyTransformAllRunning) return;
-    setConfirmingReplace(false);
-    const next = !isEditing;
-    setIsEditing(next);
-    if (next) {
-      onAnnounce(`Editing ${config.title}.`);
-      window.setTimeout(() => {
-        editTextareaRef.current?.focus({ preventScroll: true });
-      }, 20);
-    } else {
-      onAnnounce(`Saved ${config.title} text.`);
-    }
-  };
-
-  const handleRegenerateClick = () => {
-    if (isRegenerating || isAnyTransformAllRunning) return;
-    if (data.isEdited) {
-      setConfirmingReplace(true);
-      onAnnounce(
-        `${config.title} has manual edits. Confirm Replace Edit to regenerate or Keep My Edit.`
-      );
-      return;
-    }
-    onRegenerateMode(config.id);
-  };
-
-  const handleConfirmRegenerate = () => {
-    setConfirmingReplace(false);
-    setIsEditing(false);
-    onRegenerateMode(config.id);
-  };
-
-  const isDisabledActions = isRegenerating || isAnyTransformAllRunning;
-  const isRefreshingVisual = isRegenerating || isAnyTransformAllRunning;
-
   const hasMobileNotes =
     isLoadingNotes || data.explanations.length > 0 || Boolean(data.toneSummary);
+  const hasDesktopOnlyNotes = !hasMobileNotes && Boolean(data.reusablePattern);
 
   const collapseStateClass = !teachMe
     ? ''
-    : notesOpen
-      ? hasMobileNotes
-        ? 'retro-collapse-open'
-        : 'retro-collapse-desktop-only'
-      : hasMobileNotes
-        ? 'retro-collapse-mobile-only'
+    : hasMobileNotes
+      ? 'retro-collapse-open'
+      : hasDesktopOnlyNotes
+        ? 'retro-collapse-desktop-only'
         : '';
 
   const staggerClass = STAGGER_CLASSES[staggerIndex] ?? 'retro-stagger-1';
@@ -193,201 +97,56 @@ export const ModeResultCard = memo(function ModeResultCard({
               &middot; Chat
             </span>
           )}
-          {data.isEdited && (
-            <span className="hidden md:inline retro-pop-in font-mono text-xs font-semibold text-[#6B3A00] whitespace-nowrap shrink-0">
-              &middot; Edited
-            </span>
-          )}
         </div>
 
-        {isRegenerating ? (
+        {copyStatus !== 'idle' && (
           <span
             role="status"
             aria-live="polite"
-            className="retro-pop-in inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#142850] whitespace-nowrap shrink-0"
+            className={`retro-pop-in font-mono text-[11px] whitespace-nowrap shrink-0 ${
+              copyStatus === 'copied'
+                ? 'font-bold text-[#15603A]'
+                : 'font-semibold text-[#B41616]'
+            }`}
           >
-            <PixelHourglassIcon className="w-3.5 h-3.5 shrink-0 retro-hourglass-spin" />
-            <span>Rewriting</span>
+            {copyStatus === 'copied' ? 'COPIED!' : 'Select text to copy'}
           </span>
-        ) : (
-          copyStatus !== 'idle' && (
-            <span
-              role="status"
-              aria-live="polite"
-              className={`retro-pop-in font-mono text-[11px] whitespace-nowrap shrink-0 ${
-                copyStatus === 'copied'
-                  ? 'font-bold text-[#15603A]'
-                  : 'font-semibold text-[#B41616]'
-              }`}
-            >
-              {copyStatus === 'copied' ? 'COPIED!' : 'Hold text to copy'}
-            </span>
-          )
         )}
       </div>
 
-      {/* Output Area: Desktop Inline Editor OR Crisp White Text Well */}
-      {isEditing ? (
-        <div className="hidden md:block retro-pop-in space-y-2 min-w-0">
-          <div className="retro-well retro-well-input !border-[#142850] min-w-0">
-            <label htmlFor={`edit-textarea-${config.id}`} className="sr-only">
-              Edit {config.title} result
-            </label>
-            <textarea
-              ref={editTextareaRef}
-              id={`edit-textarea-${config.id}`}
-              value={data.text}
-              onChange={(e) => onUpdateModeText(config.id, e.target.value)}
-              rows={3}
-              inputMode="text"
-              autoCapitalize="sentences"
-              autoCorrect="on"
-              spellCheck={true}
-              className="w-full min-h-[100px] p-3.5 bg-[#FFFEF9] text-[#141B29] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-y focus:outline-none block"
-            />
-          </div>
+      {/* Interactive Output Text Well — Click, Tap, or Enter/Space to Copy */}
+      <div
+        ref={fallbackSelectRef}
+        role={copyStatus === 'failed' ? undefined : 'button'}
+        tabIndex={copyStatus === 'failed' ? undefined : 0}
+        aria-label={copyStatus === 'failed' ? undefined : `Copy ${config.title} text`}
+        onClick={() => {
+          if (copyStatus !== 'failed') {
+            void handleCopy();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (copyStatus !== 'failed' && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            void handleCopy();
+          }
+        }}
+        className={`retro-well retro-well-copyable w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 min-w-0 ${
+          isAnyTransformAllRunning ? 'retro-shimmer-surface opacity-75 ' : ''
+        }${
+          copyStatus === 'copied'
+            ? '!bg-[#E6F7EC] !border-[#15603A] cursor-pointer'
+            : copyStatus === 'failed'
+              ? '!bg-[#FFF8DE] !border-[#6B3A00] select-all cursor-text'
+              : 'hover:bg-[#FAF8F1] active:bg-[#EFECE0] cursor-pointer'
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
+          {data.text}
+        </p>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleToggleEdit}
-              className="retro-btn !bg-[#DCE6FA] !border-[#142850] min-h-[44px] min-w-[44px] px-4 text-xs font-bold inline-flex items-center justify-center whitespace-nowrap"
-            >
-              Done
-            </button>
-            {data.isEdited && (
-              <button
-                type="button"
-                onClick={() => {
-                  onResetModeEdit(config.id);
-                  onAnnounce(`Restored original generated text for ${config.title}.`);
-                }}
-                className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-              >
-                Undo
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div
-          ref={fallbackSelectRef}
-          onClick={() => {
-            if (copyStatus !== 'failed') {
-              void handleCopy();
-            }
-          }}
-          className={`retro-well retro-well-copyable w-full text-left px-3 md:px-3.5 py-2.5 md:py-3 min-w-0 ${
-            isRefreshingVisual ? 'retro-shimmer-surface opacity-75 ' : ''
-          }${
-            copyStatus === 'copied'
-              ? '!bg-[#E6F7EC] !border-[#15603A] cursor-pointer'
-              : copyStatus === 'failed'
-                ? '!bg-[#FFF8DE] !border-[#6B3A00] select-all cursor-text'
-                : 'hover:bg-[#FAF8F1] active:bg-[#EFECE0] cursor-pointer'
-          }`}
-        >
-          <p
-            key={regenAnimKey}
-            className={`${
-              regenAnimKey > 0 ? 'retro-pop-in ' : ''
-            }whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]`}
-          >
-            {data.text}
-          </p>
-        </div>
-      )}
-
-      {/* Desktop Inline Confirmation Before Overwriting Manually Edited Card */}
-      {confirmingReplace && (
-        <div
-          role="region"
-          aria-label={`Confirm replacing manual edits in ${config.title}`}
-          className="hidden md:flex retro-banner-enter bg-[#FFF8DE] border-2 border-[#6B3A00] p-2.5 items-center justify-between gap-2"
-        >
-          <p className="text-xs text-[#3D2200] font-mono font-semibold">
-            Replace your manual edit?
-          </p>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleConfirmRegenerate}
-              className="retro-btn-primary min-h-[44px] px-3 text-xs font-bold inline-flex items-center justify-center whitespace-nowrap"
-            >
-              Replace Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingReplace(false)}
-              className="retro-btn min-h-[44px] px-3 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-            >
-              Keep My Edit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Desktop-Only Action Row (Copy, Edit, Regenerate, Notes removed on mobile per user preference) */}
-      {!isEditing && (
-        <div className="hidden md:flex items-center justify-between gap-2 min-w-0">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopy}
-              disabled={isRegenerating || !data.text.trim()}
-              aria-label={`Copy ${config.title}`}
-              className={`retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap ${
-                copyStatus === 'copied'
-                  ? '!bg-[#D6F5DF] !border-[#15603A] !text-[#0F4224] font-bold'
-                  : ''
-              }`}
-            >
-              {copyStatus === 'copied' ? 'Copied' : 'Copy'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleToggleEdit}
-              disabled={isDisabledActions}
-              aria-label={`Edit ${config.title}`}
-              className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-            >
-              Edit
-            </button>
-
-            <button
-              type="button"
-              onClick={handleRegenerateClick}
-              disabled={isDisabledActions}
-              aria-label={`Regenerate ${config.title}`}
-              className="retro-btn min-h-[44px] min-w-[44px] px-3.5 text-xs font-semibold inline-flex items-center justify-center whitespace-nowrap"
-            >
-              {isRegenerating ? 'Rewriting' : 'Regenerate'}
-            </button>
-          </div>
-
-          {teachMe && (
-            <button
-              type="button"
-              onClick={() => setNotesOpen((prev) => !prev)}
-              aria-expanded={notesOpen}
-              aria-label={`${notesOpen ? 'Hide' : 'Show'} Teach Me Notes for ${config.title}`}
-              className={`bg-transparent border-0 shadow-none min-h-[44px] px-2 text-xs font-mono font-semibold inline-flex items-center justify-center gap-1 whitespace-nowrap underline underline-offset-3 transition-colors duration-150 cursor-pointer ${
-                notesOpen ? 'text-[#551A8B]' : 'text-[#0000EE]'
-              }`}
-            >
-              <PixelBookIcon className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                {notesOpen
-                  ? '[-] Hide Teach Me Notes'
-                  : `[+] Teach Me Notes (${data.explanations.length})`}
-              </span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Smooth CSS Grid Accordion for Teach Me Notes: Automatic on mobile when Teach Me is ON */}
+      {/* Smooth CSS Grid Accordion for Teach Me Notes: Shown automatically when Teach Me is ON */}
       <div className={`retro-collapse ${collapseStateClass}`}>
         <div className="retro-collapse-inner">
           <TeachMePanel
@@ -396,7 +155,6 @@ export const ModeResultCard = memo(function ModeResultCard({
             toneSummary={data.toneSummary}
             reusablePattern={data.reusablePattern}
             isLoadingNotes={isLoadingNotes}
-            onRequestNotes={onRequestNotes}
           />
         </div>
       </div>

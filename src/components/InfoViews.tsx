@@ -73,12 +73,12 @@ export const InfoViews = memo(function InfoViews({
             </li>
             <li className="space-y-1 retro-card-enter retro-stagger-3">
               <p className="font-mono text-sm font-semibold text-[#142850]">
-                Step 03. Copy, Edit, or Regenerate Any Voice
+                Step 03. Click Any Voice Well to Copy Instantly
               </p>
               <p className="text-sm leading-relaxed text-[#2C3342]">
-                Tap Copy (or tap the output well directly) to copy immediately, tap Edit to fine-tune any
-                card in place with full protection against accidental overwrites, or tap Regenerate on a
-                single voice without affecting the other three.
+                Click or tap any generated voice box directly to copy it straight to your clipboard, and
+                keep <strong>TEACH ME: ON</strong> enabled anytime you want phrase-by-phrase American usage
+                notes displayed automatically below each voice.
               </p>
             </li>
           </ol>

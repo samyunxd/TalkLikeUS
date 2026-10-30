@@ -4,11 +4,10 @@ import { ModeResultCard } from './components/ModeResultCard';
 import { PixelChatModeIcon, PixelFlagStamp, PixelModeIcon } from './components/PixelIcons';
 import { RetroHeader, type ActiveNavSection } from './components/RetroHeader';
 import { TextEditorWindow } from './components/TextEditorWindow';
-import { MODE_CONFIGS, ORDERED_MODE_CONFIGS } from './config/modes';
+import { ORDERED_MODE_CONFIGS } from './config/modes';
 import {
   ClientApiError,
   requestAllTransformations,
-  requestSingleRegeneration,
   requestTeachMeExplanations,
 } from './services/api';
 import {
@@ -65,15 +64,8 @@ export default function App() {
   const [resultsMap, setResultsMap] = useState<ResultsMap | null>(null);
   const [generationBatchId, setGenerationBatchId] = useState<number>(0);
   const [resultsBatchChatMode, setResultsBatchChatMode] = useState<boolean>(false);
-  const [pendingReplaceAllAction, setPendingReplaceAllAction] = useState<(() => void) | null>(null);
 
   const [isTransformingAll, setIsTransformingAll] = useState<boolean>(false);
-  const [regeneratingModes, setRegeneratingModes] = useState<Record<VoiceMode, boolean>>({
-    natural_american: false,
-    casual_slang: false,
-    unfiltered_blunt: false,
-    badass_confident: false,
-  });
   const [isLoadingNotes, setIsLoadingNotes] = useState<boolean>(false);
 
   const [errorBanner, setErrorBanner] = useState<{
@@ -87,21 +79,10 @@ export default function App() {
   const transformAbortRef = useRef<AbortController | null>(null);
   const inFlightLockRef = useRef<boolean>(false);
   const inFlightNotesRef = useRef<boolean>(false);
-  const inFlightModesRef = useRef<Record<VoiceMode, boolean>>({
-    natural_american: false,
-    casual_slang: false,
-    unfiltered_blunt: false,
-    badass_confident: false,
-  });
   const sampleIndexRef = useRef<number>(0);
   const resultsAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  const isAnyModeRegenerating = Object.values(regeneratingModes).some(Boolean);
-  const isAnyBusy = isTransformingAll || isAnyModeRegenerating;
-
-  const hasAnyManualEdits = resultsMap
-    ? VOICE_MODES.some((m) => Boolean(resultsMap[m].isEdited))
-    : false;
+  const isAnyBusy = isTransformingAll;
 
   // Latest state snapshot ref so memoized child callbacks stay referentially stable across keystrokes
   const latestRef = useRef({
@@ -111,8 +92,6 @@ export default function App() {
     chatModeEnabled,
     resultsMap,
     isAnyBusy,
-    hasAnyManualEdits,
-    pendingReplaceAllAction,
   });
   latestRef.current = {
     inputText,
@@ -121,8 +100,6 @@ export default function App() {
     chatModeEnabled,
     resultsMap,
     isAnyBusy,
-    hasAnyManualEdits,
-    pendingReplaceAllAction,
   };
 
   const announce = useCallback((msg: string) => {
@@ -140,7 +117,6 @@ export default function App() {
       const controller = new AbortController();
       transformAbortRef.current = controller;
 
-      setPendingReplaceAllAction(null);
       setErrorBanner(null);
       setIsTransformingAll(true);
       announce(
@@ -196,175 +172,23 @@ export default function App() {
     [announce]
   );
 
-  const requestBatchTransformWithEditGuard = useCallback(
-    (textToProcess: string, teachMeOn: boolean, chatModeOn: boolean) => {
-      const { isAnyBusy: busy, hasAnyManualEdits: hasEdits } = latestRef.current;
-      if (busy || inFlightLockRef.current || !textToProcess.trim()) return;
-      if (hasEdits) {
-        setPendingReplaceAllAction(() => () => {
-          void executeTransformAll(textToProcess, teachMeOn, chatModeOn);
-        });
-        announce('Manual edits detected. Confirm Replace All or Keep Edits.');
-        return;
-      }
-      void executeTransformAll(textToProcess, teachMeOn, chatModeOn);
-    },
-    [announce, executeTransformAll]
-  );
-
   const handleAmericanizeSubmit = useCallback(() => {
-    const { inputText: txt, teachMe: tm, chatModeEnabled: cm } = latestRef.current;
-    requestBatchTransformWithEditGuard(txt, tm, cm);
-  }, [requestBatchTransformWithEditGuard]);
+    const {
+      inputText: txt,
+      teachMe: tm,
+      chatModeEnabled: cm,
+      isAnyBusy: busy,
+    } = latestRef.current;
+    if (busy || inFlightLockRef.current || !txt.trim()) return;
+    void executeTransformAll(txt, tm, cm);
+  }, [executeTransformAll]);
 
   const handleClearText = useCallback(() => {
     if (latestRef.current.isAnyBusy) return;
     setInputText('');
     setErrorBanner(null);
-    setPendingReplaceAllAction(null);
     announce('Cleared text editor.');
   }, [announce]);
-
-  const handleConfirmReplaceAll = useCallback(() => {
-    const action = latestRef.current.pendingReplaceAllAction;
-    setPendingReplaceAllAction(null);
-    action?.();
-  }, []);
-
-  const handleCancelReplaceAll = useCallback(() => {
-    setPendingReplaceAllAction(null);
-  }, []);
-
-  const handleUpdateModeTextLive = useCallback((mode: VoiceMode, nextText: string) => {
-    setResultsMap((prev) => {
-      if (!prev) return prev;
-      const current = prev[mode];
-      const baseGenerated = current.generatedText ?? current.text;
-      return {
-        ...prev,
-        [mode]: {
-          ...current,
-          text: nextText,
-          generatedText: baseGenerated,
-          isEdited: nextText.trim() !== baseGenerated.trim(),
-        },
-      };
-    });
-  }, []);
-
-  const handleResetModeEdit = useCallback((mode: VoiceMode) => {
-    setResultsMap((prev) => {
-      if (!prev) return prev;
-      const current = prev[mode];
-      const restored = current.generatedText ?? current.text;
-      return {
-        ...prev,
-        [mode]: {
-          ...current,
-          text: restored,
-          generatedText: restored,
-          isEdited: false,
-        },
-      };
-    });
-  }, []);
-
-  const executeSingleRegenerate = useCallback(
-    async (mode: VoiceMode) => {
-      const {
-        inputText: currentInput,
-        submittedSourceText: currentSubmitted,
-        teachMe: tm,
-        chatModeEnabled: cm,
-        resultsMap: currentMap,
-      } = latestRef.current;
-
-      const source = currentInput.trim() || currentSubmitted;
-      if (!source || inFlightModesRef.current[mode] || inFlightLockRef.current) return;
-
-      inFlightModesRef.current[mode] = true;
-      setErrorBanner(null);
-      setRegeneratingModes((prev) => ({ ...prev, [mode]: true }));
-      const modeTitle = MODE_CONFIGS[mode].title;
-      announce(
-        cm
-          ? `Regenerating ${modeTitle} with Chat Mode...`
-          : `Regenerating ${modeTitle}...`
-      );
-
-      const previousResult = currentMap?.[mode]?.generatedText || currentMap?.[mode]?.text;
-      const otherResults: Partial<Record<VoiceMode, string>> = {};
-      if (currentMap) {
-        for (const m of VOICE_MODES) {
-          if (m !== mode) {
-            otherResults[m] = currentMap[m].text;
-          }
-        }
-      }
-
-      try {
-        const res = await requestSingleRegeneration({
-          text: source,
-          mode,
-          teachMe: tm,
-          chatMode: cm,
-          previousResult,
-          otherResults,
-        });
-
-        setResultsMap((prev) => {
-          if (!prev) return prev;
-          const freshText = res.result.text;
-          const next = {
-            ...prev,
-            [mode]: {
-              mode,
-              text: freshText,
-              generatedText: freshText,
-              isEdited: false,
-              explanations: res.result.explanations || [],
-              toneSummary: res.result.toneSummary,
-              reusablePattern: res.result.reusablePattern,
-              chatMode: res.result.chatMode ?? cm,
-            },
-          };
-          const allMatchCurrentToggle = VOICE_MODES.every(
-            (m) => Boolean(next[m].chatMode) === latestRef.current.chatModeEnabled
-          );
-          if (allMatchCurrentToggle) {
-            setResultsBatchChatMode(latestRef.current.chatModeEnabled);
-          }
-          return next;
-        });
-        announce(`${modeTitle} updated with a fresh variation.`);
-      } catch (err) {
-        const message =
-          err instanceof ClientApiError
-            ? err.message
-            : `Could not regenerate ${modeTitle}. Your existing text was preserved.`;
-        const retryable = err instanceof ClientApiError ? err.retryable : true;
-        setErrorBanner({
-          message,
-          retryable,
-          retryFn: () => {
-            void executeSingleRegenerate(mode);
-          },
-        });
-        announce(`Error regenerating ${modeTitle}: ${message}`);
-      } finally {
-        inFlightModesRef.current[mode] = false;
-        setRegeneratingModes((prev) => ({ ...prev, [mode]: false }));
-      }
-    },
-    [announce]
-  );
-
-  const handleRegenerateMode = useCallback(
-    (mode: VoiceMode) => {
-      void executeSingleRegenerate(mode);
-    },
-    [executeSingleRegenerate]
-  );
 
   const fetchNotesForExistingResults = useCallback(
     async (currentMap: ResultsMap, source: string, isChat: boolean) => {
@@ -420,18 +244,6 @@ export default function App() {
     [announce]
   );
 
-  const handleRequestNotesFromCard = useCallback(() => {
-    const {
-      resultsMap: currentMap,
-      submittedSourceText: currentSubmitted,
-      inputText: currentInput,
-    } = latestRef.current;
-    if (!currentMap) return;
-    const source = currentSubmitted || currentInput.trim();
-    const anyChat = VOICE_MODES.some((m) => Boolean(currentMap[m].chatMode));
-    void fetchNotesForExistingResults(currentMap, source, anyChat);
-  }, [fetchNotesForExistingResults]);
-
   const handleToggleTeachMe = useCallback(() => {
     const {
       teachMe: prevTeachMe,
@@ -460,8 +272,8 @@ export default function App() {
     setChatModeEnabled(nextVal);
     announce(
       nextVal
-        ? 'Chat Mode ON. Applies to your next generation or regeneration.'
-        : 'Chat Mode OFF. Applies to your next generation or regeneration.'
+        ? 'Chat Mode ON. Applies to your next generation.'
+        : 'Chat Mode OFF. Applies to your next generation.'
     );
   }, [announce]);
 
@@ -626,9 +438,6 @@ export default function App() {
                 isAnyBusy={isAnyBusy}
                 onSubmitTransform={handleAmericanizeSubmit}
                 onTrimToLimit={handleTrimOversizedInput}
-                pendingReplaceAllConfirm={pendingReplaceAllAction !== null}
-                onConfirmReplaceAll={handleConfirmReplaceAll}
-                onCancelReplaceAll={handleCancelReplaceAll}
               />
 
               {/* Instantaneous Shimmer Skeleton Preview on First Generation */}
@@ -703,23 +512,6 @@ export default function App() {
                           </>
                         )}
                       </div>
-
-                      {hasPendingChatModeDiff && (
-                        <button
-                          type="button"
-                          disabled={isAnyBusy}
-                          onClick={() =>
-                            requestBatchTransformWithEditGuard(
-                              inputText.trim() || submittedSourceText,
-                              teachMe,
-                              chatModeEnabled
-                            )
-                          }
-                          className="retro-link min-h-[44px] inline-flex items-center text-xs font-semibold disabled:opacity-50 whitespace-nowrap shrink-0"
-                        >
-                          Regenerate All with Chat Mode {chatModeEnabled ? 'ON' : 'OFF'}
-                        </button>
-                      )}
                     </div>
                   )}
 
@@ -730,13 +522,8 @@ export default function App() {
                       staggerIndex={idx}
                       data={resultsMap[cfg.id]}
                       teachMe={teachMe}
-                      isRegenerating={regeneratingModes[cfg.id]}
                       isAnyTransformAllRunning={isTransformingAll}
                       isLoadingNotes={isLoadingNotes}
-                      onUpdateModeText={handleUpdateModeTextLive}
-                      onResetModeEdit={handleResetModeEdit}
-                      onRegenerateMode={handleRegenerateMode}
-                      onRequestNotes={handleRequestNotesFromCard}
                       onAnnounce={announce}
                     />
                   ))}

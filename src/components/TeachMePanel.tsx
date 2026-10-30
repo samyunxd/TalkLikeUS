@@ -7,7 +7,6 @@ interface TeachMePanelProps {
   toneSummary?: string;
   reusablePattern?: string;
   isLoadingNotes?: boolean;
-  onRequestNotes?: () => void;
 }
 
 const REGISTER_LABELS: Record<RegisterLevel, { label: string; textClass: string }> = {
@@ -39,11 +38,7 @@ export const TeachMePanel = memo(function TeachMePanel({
   toneSummary,
   reusablePattern,
   isLoadingNotes,
-  onRequestNotes,
 }: TeachMePanelProps) {
-  const hasDesktopContent =
-    explanations.length > 0 || Boolean(toneSummary) || Boolean(reusablePattern);
-
   return (
     <div className="bg-[#ECE8D9] border border-[#8E8772] px-2.5 md:px-3.5 py-2 md:py-2.5 space-y-1.5 md:space-y-2 text-xs min-w-0">
       {isLoadingNotes ? (
@@ -55,19 +50,6 @@ export const TeachMePanel = memo(function TeachMePanel({
           </span>
           <span className="md:hidden">Loading notes</span>
           <span className="hidden md:inline">Loading {modeTitle} notes</span>
-        </div>
-      ) : !hasDesktopContent ? (
-        <div className="hidden md:flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-[#3E3A30]">No notes loaded yet.</p>
-          {onRequestNotes && (
-            <button
-              type="button"
-              onClick={onRequestNotes}
-              className="retro-btn min-h-[44px] px-3 text-xs font-semibold whitespace-nowrap shrink-0"
-            >
-              Load Notes
-            </button>
-          )}
         </div>
       ) : (
         <>
