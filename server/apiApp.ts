@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { type Express, type Request, type Response } from 'express';
 import { MAX_INPUT_CHARS } from '../src/config/modes.ts';
 import { VOICE_MODES, type ApiErrorPayload, type VoiceMode } from '../src/types/transform.ts';
+import { normalizeInputPreservingFormat } from './formatAnalyzer.ts';
 import {
   ServiceError,
   explainExistingResults,
@@ -66,8 +67,8 @@ function validateSourceText(raw: unknown, res: Response): string | null {
     return null;
   }
 
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
+  const normalized = normalizeInputPreservingFormat(raw);
+  if (normalized.length === 0) {
     res.status(400).json({
       error: 'Your input is empty. Paste a sentence, message, or paragraph first.',
       code: 'INVALID_INPUT',
@@ -76,9 +77,9 @@ function validateSourceText(raw: unknown, res: Response): string | null {
     return null;
   }
 
-  if (trimmed.length > MAX_INPUT_CHARS) {
+  if (normalized.length > MAX_INPUT_CHARS) {
     res.status(413).json({
-      error: `Your text is ${trimmed.length.toLocaleString()} characters, which exceeds the ${MAX_INPUT_CHARS.toLocaleString()}-character studio limit. Trim or split the text below to proceed.`,
+      error: `Your text is ${normalized.length.toLocaleString()} characters, which exceeds the ${MAX_INPUT_CHARS.toLocaleString()}-character studio limit. Trim or split the text below to proceed.`,
       code: 'INPUT_TOO_LONG',
       retryable: false,
       maxChars: MAX_INPUT_CHARS,
@@ -86,7 +87,7 @@ function validateSourceText(raw: unknown, res: Response): string | null {
     return null;
   }
 
-  return trimmed;
+  return normalized;
 }
 
 export interface CreateApiAppOptions {

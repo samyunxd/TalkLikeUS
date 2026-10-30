@@ -15,7 +15,11 @@ import {
   type ModeTransformation,
   type VoiceMode,
 } from './types/transform';
-import { SAMPLE_PROMPTS, trimToSafeBoundary } from './utils/textStats';
+import {
+  SAMPLE_PROMPTS,
+  normalizeClientTextPreservingFormat,
+  trimToSafeBoundary,
+} from './utils/textStats';
 
 type ResultsMap = Record<VoiceMode, ModeTransformation>;
 
@@ -100,8 +104,8 @@ export default function App() {
 
   const executeTransformAll = useCallback(
     async (textToProcess: string, teachMeOn: boolean, chatModeOn: boolean) => {
-      const trimmed = textToProcess.trim();
-      if (!trimmed || inFlightLockRef.current) return;
+      const normalized = normalizeClientTextPreservingFormat(textToProcess);
+      if (!normalized || inFlightLockRef.current) return;
 
       inFlightLockRef.current = true;
       transformAbortRef.current?.abort();
@@ -118,13 +122,13 @@ export default function App() {
 
       try {
         const res = await requestAllTransformations({
-          text: trimmed,
+          text: normalized,
           teachMe: teachMeOn,
           chatMode: chatModeOn,
           signal: controller.signal,
         });
 
-        setSubmittedSourceText(trimmed);
+        setSubmittedSourceText(normalized);
         setResultsMap(buildResultsMap(res.results, chatModeOn));
         setResultsBatchChatMode(chatModeOn);
         announce('All four American voices are ready.');
@@ -250,7 +254,8 @@ export default function App() {
         (m) => currentMap[m].explanations.length === 0 && !currentMap[m].toneSummary
       );
       if (missingNotes) {
-        const source = currentSubmitted || currentInput.trim();
+        const source =
+          currentSubmitted || normalizeClientTextPreservingFormat(currentInput);
         const anyChat = VOICE_MODES.some((m) => Boolean(currentMap[m].chatMode));
         void fetchNotesForExistingResults(currentMap, source, anyChat);
       }

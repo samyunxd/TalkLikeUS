@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build:api": "esbuild server/serverlessEntry.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=api/index.js",
+    "build:api": "node scripts/buildApi.mjs",
     "build": "npm run build:api && vite build",
     "start": "node server.ts",
     "preview": "vite preview",

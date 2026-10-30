@@ -19,6 +19,12 @@ import {
 } from '../src/types/transform.ts';
 import { splitIntoMeaningPreservingChunks } from './chunker.ts';
 import {
+  analyzeTextFormat,
+  enforceFormatFidelity,
+  finalizeCombinedOutput,
+  type FormatProfile,
+} from './formatAnalyzer.ts';
+import {
   SYSTEM_INSTRUCTION,
   buildExplainExistingPrompt,
   buildRegenerateSinglePrompt,
@@ -179,6 +185,14 @@ function buildThinkingConfig(model: string): GenerateContentConfig['thinkingConf
   return undefined;
 }
 
+function allowsTemperatureParam(model: string): boolean {
+  const lower = model.toLowerCase();
+  if (lower.startsWith('gemini-3.8') || lower.startsWith('gemini-4')) {
+    return false;
+  }
+  return true;
+}
+
 function createGenAIClient(apiKey: string, useVertex: boolean): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
@@ -233,7 +247,8 @@ const MODE_ITEM_SCHEMA = {
     },
     text: {
       type: Type.STRING,
-      description: 'The complete transformed American English text for this voice.',
+      description:
+        'The complete transformed American English text for this voice, strictly mirroring the exact structural format, line breaks, indentation, list prefixes, headers, labels, and markup of the source text.',
     },
     toneSummary: {
       type: Type.STRING,
@@ -624,8 +639,19 @@ async function generateSingleModeChunk(params: {
   previousResult?: string;
   otherResults?: Partial<Record<VoiceMode, string>>;
   chunk?: ReturnType<typeof splitIntoMeaningPreservingChunks>[number];
+  formatProfile?: FormatProfile;
 }): Promise<{ item: ModeTransformation; usedModel: string }> {
-  const { sourceText, mode, teachMe, chatMode, previousResult, otherResults, chunk } = params;
+  const {
+    sourceText,
+    mode,
+    teachMe,
+    chatMode,
+    previousResult,
+    otherResults,
+    chunk,
+    formatProfile: precomputedFormat,
+  } = params;
+  const formatProfile = precomputedFormat ?? analyzeTextFormat(sourceText);
 
   const { data, usedModel } = await executeAcrossCandidateModels(async (ai, model) => {
     const thinkingConfig = buildThinkingConfig(model);
@@ -639,10 +665,11 @@ async function generateSingleModeChunk(params: {
         previousResult,
         otherResults,
         chunk,
+        formatProfile,
       }),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.85,
+        ...(allowsTemperatureParam(model) ? { temperature: 0.85 } : {}),
         responseMimeType: 'application/json',
         responseSchema: SINGLE_MODE_SCHEMA,
         safetySettings: SAFETY_SETTINGS,
@@ -666,8 +693,11 @@ async function generateSingleModeChunk(params: {
 
     const parsed = JSON.parse(rawText) as { result?: Record<string, unknown> };
     const resObj = parsed?.result;
-    const outText = typeof resObj?.text === 'string' ? resObj.text.trim() : '';
-    if (!outText) {
+    const rawOutText = typeof resObj?.text === 'string' ? resObj.text : '';
+    const outText = rawOutText.trim()
+      ? enforceFormatFidelity(rawOutText, sourceText, formatProfile)
+      : '';
+    if (!outText.trim()) {
       throw new Error('Missing transformed text in single mode response');
     }
 
@@ -696,6 +726,7 @@ async function generateAllModesChunk(params: {
   chatMode: boolean;
 }): Promise<{ map: Record<VoiceMode, ModeTransformation>; usedModel: string }> {
   const { chunk, teachMe, chatMode } = params;
+  const formatProfile = analyzeTextFormat(chunk.content);
 
   const partialMap: Partial<Record<VoiceMode, ModeTransformation>> = {};
   let activeModel = getConfiguredModel();
@@ -706,10 +737,16 @@ async function generateAllModesChunk(params: {
         const thinkingConfig = buildThinkingConfig(model);
         const response = await ai.models.generateContent({
           model,
-          contents: buildTransformAllPrompt(chunk.content, teachMe, chatMode, chunk),
+          contents: buildTransformAllPrompt(
+            chunk.content,
+            teachMe,
+            chatMode,
+            chunk,
+            formatProfile
+          ),
           config: {
             systemInstruction: SYSTEM_INSTRUCTION,
-            temperature: 0.8,
+            ...(allowsTemperatureParam(model) ? { temperature: 0.8 } : {}),
             responseMimeType: 'application/json',
             responseSchema: ALL_MODES_SCHEMA,
             safetySettings: SAFETY_SETTINGS,
@@ -743,8 +780,11 @@ async function generateAllModesChunk(params: {
 
     for (const item of parsedResults) {
       const modeId = typeof item.mode === 'string' ? (item.mode.trim() as VoiceMode) : undefined;
-      const textVal = typeof item.text === 'string' ? item.text.trim() : '';
-      if (modeId && VOICE_MODES.includes(modeId) && textVal) {
+      const rawItemText = typeof item.text === 'string' ? item.text : '';
+      const textVal = rawItemText.trim()
+        ? enforceFormatFidelity(rawItemText, chunk.content, formatProfile)
+        : '';
+      if (modeId && VOICE_MODES.includes(modeId) && textVal.trim()) {
         partialMap[modeId] = {
           mode: modeId,
           text: textVal,
@@ -784,6 +824,7 @@ async function generateAllModesChunk(params: {
           teachMe,
           chatMode,
           chunk,
+          formatProfile,
         })
       )
     );
@@ -821,10 +862,10 @@ export async function transformAllModes(
   }
 
   const finalResults: ModeTransformation[] = VOICE_MODES.map((mode) => {
-    const combinedText = chunkOutputs
-      .map((out, idx) => out[mode].text + chunks[idx].separatorAfter)
-      .join('')
-      .trim();
+    const combinedText = finalizeCombinedOutput(
+      chunkOutputs.map((out, idx) => out[mode].text + chunks[idx].separatorAfter).join(''),
+      sourceText
+    );
 
     const mergedExplanations: ExplanationNote[] = [];
     const seenReplacements = new Set<string>();
@@ -885,10 +926,10 @@ export async function regenerateSingleMode(params: {
     usedModel = singleChunkRes.usedModel;
   }
 
-  const combinedText = chunkResults
-    .map((r, idx) => r.text + chunks[idx].separatorAfter)
-    .join('')
-    .trim();
+  const combinedText = finalizeCombinedOutput(
+    chunkResults.map((r, idx) => r.text + chunks[idx].separatorAfter).join(''),
+    sourceText
+  );
 
   const mergedExplanations: ExplanationNote[] = [];
   const seen = new Set<string>();
@@ -938,7 +979,7 @@ export async function explainExistingResults(
       contents: buildExplainExistingPrompt(boundedSource, boundedResults, chatMode),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.4,
+        ...(allowsTemperatureParam(model) ? { temperature: 0.4 } : {}),
         responseMimeType: 'application/json',
         responseSchema: EXPLAIN_ONLY_SCHEMA,
         safetySettings: SAFETY_SETTINGS,

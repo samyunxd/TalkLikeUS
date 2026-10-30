@@ -180,7 +180,7 @@ export const TextEditorWindow = memo(function TextEditorWindow({
             autoCorrect="on"
             spellCheck={true}
             placeholder="Type or paste text..."
-            className="w-full min-h-[104px] sm:min-h-[150px] p-2.5 sm:p-3.5 bg-transparent text-[#141B29] placeholder:text-[#767060] text-base leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] resize-none md:resize-y focus:outline-none block"
+            className="w-full min-h-[104px] sm:min-h-[150px] p-2.5 sm:p-3.5 bg-transparent text-[#141B29] placeholder:text-[#767060] text-base leading-relaxed whitespace-pre-wrap [tab-size:2] break-words [overflow-wrap:anywhere] resize-none md:resize-y focus:outline-none block"
           />
         </div>
 
@@ -309,8 +309,8 @@ export const TextEditorWindow = memo(function TextEditorWindow({
         <div className="hidden md:flex flex-wrap items-center justify-between gap-2 text-xs text-[#4B4639]">
           <p className="leading-relaxed">
             {chatModeEnabled
-              ? 'Chat Mode ON: compresses your message into short, real American texts.'
-              : 'Preserves your exact meaning across four American voices.'}
+              ? 'Chat Mode ON: compresses your message into short American texts while keeping your layout.'
+              : 'Preserves your exact meaning and formatting across four American voices.'}
           </p>
           <span className="font-mono text-[11px] text-[#555043] tabular-nums whitespace-nowrap shrink-0">
             Words: {metrics.words.toLocaleString()} &middot; Chars: {metrics.chars.toLocaleString()}

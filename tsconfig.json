@@ -24,5 +24,5 @@
     "rewriteRelativeImportExtensions": true,
     "noEmit": true
   },
-  "exclude": ["node_modules", "dist", "api", ".vercel"]
+  "exclude": ["node_modules", "dist", "api", "scripts", ".vercel"]
 }

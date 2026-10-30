@@ -148,7 +148,7 @@ export const ModeResultCard = memo(function ModeResultCard({
               : 'cursor-pointer'
         }`}
       >
-        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
+        <p className="whitespace-pre-wrap [tab-size:2] break-words [overflow-wrap:anywhere] text-[15px] md:text-base leading-relaxed text-[#141B29]">
           {data.text}
         </p>
       </div>

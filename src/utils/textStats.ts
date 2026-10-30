@@ -23,9 +23,25 @@ export function getTextMetrics(text: string): TextMetrics {
   };
 }
 
+export function normalizeClientTextPreservingFormat(raw: string): string {
+  const unix = raw.replace(/\r\n?/g, '\n');
+  if (unix.trim().length === 0) return '';
+
+  const trimmedBoundaries = unix
+    .replace(/^(?:[ \t]*\n)+/, '')
+    .replace(/(?:\n[ \t]*)+$/, '')
+    .replace(/[ \t]+$/, '');
+
+  if (!trimmedBoundaries.includes('\n')) {
+    return trimmedBoundaries.trim();
+  }
+
+  return trimmedBoundaries;
+}
+
 /**
- * Safely trims an oversized paste to the last complete paragraph or sentence
- * within MAX_INPUT_CHARS so the user can recover in one click without silent mid-word cuts.
+ * Safely trims an oversized paste to the last complete paragraph, line, or sentence
+ * within MAX_INPUT_CHARS so the user can recover in one click without mid-word/mid-item cuts.
  */
 export function trimToSafeBoundary(text: string, limit = MAX_INPUT_CHARS): string {
   if (text.length <= limit) return text;
@@ -33,7 +49,12 @@ export function trimToSafeBoundary(text: string, limit = MAX_INPUT_CHARS): strin
 
   const lastParaBreak = slice.lastIndexOf('\n\n');
   if (lastParaBreak > limit * 0.65) {
-    return slice.slice(0, lastParaBreak).trim();
+    return normalizeClientTextPreservingFormat(slice.slice(0, lastParaBreak));
+  }
+
+  const lastLineBreak = slice.lastIndexOf('\n');
+  if (lastLineBreak > limit * 0.65) {
+    return normalizeClientTextPreservingFormat(slice.slice(0, lastLineBreak));
   }
 
   const lastSentenceEnd = Math.max(
@@ -42,11 +63,13 @@ export function trimToSafeBoundary(text: string, limit = MAX_INPUT_CHARS): strin
     slice.lastIndexOf('? ')
   );
   if (lastSentenceEnd > limit * 0.65) {
-    return slice.slice(0, lastSentenceEnd + 1).trim();
+    return normalizeClientTextPreservingFormat(slice.slice(0, lastSentenceEnd + 1));
   }
 
   const lastSpace = slice.lastIndexOf(' ');
-  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim();
+  return normalizeClientTextPreservingFormat(
+    lastSpace > 0 ? slice.slice(0, lastSpace) : slice
+  );
 }
 
 export interface SamplePrompt {
