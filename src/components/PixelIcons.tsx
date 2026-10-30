@@ -149,3 +149,48 @@ export function PixelSpinnerIcon({ className = 'w-4 h-4 shrink-0' }: { className
     </svg>
   );
 }
+
+export function PixelCopyIcon({ className = 'w-3.5 h-3.5 shrink-0' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      fill="currentColor"
+      className={className}
+    >
+      {/* Back sheet */}
+      <rect x="2" y="1" width="8" height="1" />
+      <rect x="2" y="1" width="1" height="10" />
+      <rect x="2" y="10" width="2" height="1" />
+      <rect x="9" y="1" width="1" height="2" />
+      {/* Front sheet */}
+      <rect x="5" y="4" width="9" height="1" />
+      <rect x="5" y="14" width="9" height="1" />
+      <rect x="5" y="4" width="1" height="11" />
+      <rect x="13" y="4" width="1" height="11" />
+      {/* Mini text lines */}
+      <rect x="7" y="7" width="5" height="1" />
+      <rect x="7" y="10" width="4" height="1" />
+    </svg>
+  );
+}
+
+export function PixelCheckIcon({ className = 'w-3.5 h-3.5 shrink-0' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      fill="currentColor"
+      className={className}
+    >
+      <rect x="2" y="8" width="2" height="2" />
+      <rect x="4" y="10" width="2" height="2" />
+      <rect x="6" y="12" width="2" height="2" />
+      <rect x="8" y="9" width="2" height="3" />
+      <rect x="10" y="6" width="2" height="3" />
+      <rect x="12" y="3" width="2" height="3" />
+    </svg>
+  );
+}
